@@ -17,9 +17,18 @@ class ActivityLoggingJob < ApplicationJob
     end
     
     Rails.logger.info "Activity logging job completed"
+    
+    # Reschedule the job for the next execution
+    reschedule_job
   end
 
   private
+
+  def reschedule_job
+    # Schedule the next execution
+    self.class.set(wait: 2.minutes).perform_later
+    Rails.logger.info "Activity logging job rescheduled for 2 minutes from now"
+  end
 
   def generate_system_activities
     activities = []

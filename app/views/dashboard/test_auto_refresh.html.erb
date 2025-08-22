@@ -1,0 +1,60 @@
+<% content_for :title, "Auto-refresh Test" %>
+
+<div id="dashboard-content" data-dashboard-target="content">
+  <div class="dashboard-header">
+    <h2>Auto-refresh Test Page</h2>
+    <p class="dashboard-subtitle">Testing real-time updates</p>
+    <div class="auto-refresh-indicator" id="auto-refresh-status">
+      <span class="status-dot"></span>
+      <span class="status-text">Auto-refresh active</span>
+    </div>
+  </div>
+
+  <div class="dashboard-grid">
+    <div class="dashboard-card">
+      <div class="card-header">
+        <h3>Current Time</h3>
+      </div>
+      <div class="card-content">
+        <div class="metric-item">
+          <span class="label">Server Time:</span>
+          <span class="value" id="server-time"><%= @current_time %></span>
+        </div>
+        <div class="metric-item">
+          <span class="label">System Status Updated:</span>
+          <span class="value" id="status-time"><%= @system_status.last_check.strftime("%H:%M:%S") %></span>
+        </div>
+        <div class="metric-item">
+          <span class="label">Page Loaded:</span>
+          <span class="value" id="page-time"><%= Time.current.strftime("%H:%M:%S") %></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="dashboard-card">
+      <div class="card-header">
+        <h3>Auto-refresh Status</h3>
+      </div>
+      <div class="card-content">
+        <div class="metric-item">
+          <span class="label">Auto-refresh:</span>
+          <span class="value" id="auto-refresh-status">Active</span>
+        </div>
+        <div class="metric-item">
+          <span class="label">Refresh Interval:</span>
+          <span class="value">30 seconds</span>
+        </div>
+        <div class="metric-item">
+          <span class="label">Last Refresh:</span>
+          <span class="value" id="last-refresh">Never</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="dashboard-footer-info">
+    <p>This page should update automatically every 30 seconds</p>
+    <p>Check the browser console for debug messages</p>
+    <p>Last page refresh: <%= Time.current.strftime("%H:%M:%S") %></p>
+  </div>
+</div> 

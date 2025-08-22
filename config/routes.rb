@@ -14,5 +14,7 @@ Rails.application.routes.draw do
   get "dashboard", to: "dashboard#index"
   get "dashboard/refresh", to: "dashboard#refresh"
   get "dashboard/trigger-jobs", to: "dashboard#trigger_jobs"
+  get "dashboard/test-auto-refresh", to: "dashboard#test_auto_refresh"
+  get "dashboard/debug", to: "dashboard#debug"
   get "dashboard/metrics", to: "dashboard#metrics"
 end

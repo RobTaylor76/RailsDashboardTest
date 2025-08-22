@@ -9,16 +9,17 @@ Rails.application.config.after_initialize do
 end
 
 def schedule_jobs
-  # Schedule metric collection every 30 seconds
-  MetricCollectionJob.set(wait: 30.seconds).perform_later
+  # Start the initial jobs immediately
+  MetricCollectionJob.perform_later
+  ActivityLoggingJob.perform_later
+  StatusCheckJob.perform_later
   
-  # Schedule activity logging every 2 minutes
+  # Also schedule them with delays to ensure they run continuously
+  MetricCollectionJob.set(wait: 30.seconds).perform_later
+  StatusCheckJob.set(wait: 30.seconds).perform_later
   ActivityLoggingJob.set(wait: 2.minutes).perform_later
   
-  # Schedule status check every 30 seconds
-  StatusCheckJob.set(wait: 30.seconds).perform_later
-  
-  Rails.logger.info "Dashboard jobs scheduled"
+  Rails.logger.info "Dashboard jobs started with continuous scheduling"
 rescue => e
-  Rails.logger.error "Failed to schedule dashboard jobs: #{e.message}"
+  Rails.logger.error "Failed to start dashboard jobs: #{e.message}"
 end 

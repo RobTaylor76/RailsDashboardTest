@@ -15,6 +15,7 @@ class DashboardController < ApplicationController
     
     respond_to do |format|
       format.turbo_stream { render :index }
+      format.json { render json: dashboard_data_json }
     end
   end
 
@@ -25,6 +26,23 @@ class DashboardController < ApplicationController
     StatusCheckJob.perform_later
     
     redirect_to root_path, notice: "Background jobs triggered successfully"
+  end
+
+  def test_auto_refresh
+    # Simple test page to verify auto-refresh
+    @current_time = Time.current.strftime("%H:%M:%S")
+    @system_status = SystemStatus.current_status
+  end
+
+  def debug
+    # Debug endpoint to check if everything is working
+    @debug_info = {
+      current_time: Time.current.strftime("%H:%M:%S"),
+      system_status: SystemStatus.current_status.last_check.strftime("%H:%M:%S"),
+      metrics_count: Metric.count,
+      activities_count: Activity.count,
+      jobs_running: true
+    }
   end
 
   def metrics
@@ -50,5 +68,32 @@ class DashboardController < ApplicationController
     
     # Calculate response time (simulated for now)
     @response_time = rand(50..200) # milliseconds
+  end
+
+  def dashboard_data_json
+    {
+      system_status: {
+        status: @system_status.status,
+        uptime: @system_status.formatted_uptime,
+        last_check: @system_status.last_check.strftime("%H:%M:%S"),
+        message: @system_status.details&.dig('message') || 'No status message'
+      },
+      metrics: {
+        cpu: @cpu_metric ? "#{@cpu_metric.value}#{@cpu_metric.unit}" : '--',
+        memory: @memory_metric ? "#{@memory_metric.value}#{@memory_metric.unit}" : '--',
+        disk: @disk_metric ? "#{@disk_metric.value}#{@disk_metric.unit}" : '--',
+        network: @network_metric ? "#{@network_metric.value} #{@network_metric.unit}" : '--',
+        response_time: "#{@response_time}ms"
+      },
+      activities: @recent_activities.map do |activity|
+        {
+          time: activity.formatted_time,
+          message: activity.message,
+          level: activity.level,
+          css_class: activity.css_class
+        }
+      end,
+      timestamp: Time.current.strftime("%H:%M:%S")
+    }
   end
 end 

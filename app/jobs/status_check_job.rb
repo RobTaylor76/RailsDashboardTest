@@ -26,9 +26,18 @@ class StatusCheckJob < ApplicationJob
     end
     
     Rails.logger.info "Status check job completed"
+    
+    # Reschedule the job for the next execution
+    reschedule_job
   end
 
   private
+
+  def reschedule_job
+    # Schedule the next execution
+    self.class.set(wait: 30.seconds).perform_later
+    Rails.logger.info "Status check job rescheduled for 30 seconds from now"
+  end
 
   def check_system_health
     # Simulate system health check

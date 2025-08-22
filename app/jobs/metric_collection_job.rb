@@ -44,9 +44,18 @@ class MetricCollectionJob < ApplicationJob
     Activity.log_info("Metrics collected successfully", source: "metric_collection_job")
     
     Rails.logger.info "Metric collection job completed"
+    
+    # Reschedule the job for the next execution
+    reschedule_job
   end
 
   private
+
+  def reschedule_job
+    # Schedule the next execution
+    self.class.set(wait: 30.seconds).perform_later
+    Rails.logger.info "Metric collection job rescheduled for 30 seconds from now"
+  end
 
   def collect_cpu_usage
     # Simulate CPU usage with some variation
