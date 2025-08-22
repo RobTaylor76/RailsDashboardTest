@@ -1,4 +1,5 @@
 import { Controller } from "@hotwired/stimulus"
+import consumer from "channels/consumer"
 
 export default class extends Controller {
   static targets = ["content", "refreshBtn"]
@@ -9,79 +10,79 @@ export default class extends Controller {
   connect() {
     console.log("🚀 SSE Dashboard controller connected")
     console.log("📊 Auto-refresh enabled:", this.autoRefreshValue)
+    console.log("🔌 Action Cable consumer:", consumer)
     
     this.setupRefreshButton()
     this.showConnectedIndicator()
     
     if (this.autoRefreshValue) {
-      this.startSSEConnection()
+      this.startActionCableConnection()
     }
   }
 
   disconnect() {
     console.log("🔌 SSE Dashboard controller disconnected")
-    this.stopSSEConnection()
+    this.stopActionCableConnection()
   }
 
-  startSSEConnection() {
-    console.log("🔄 Starting SSE connection")
+  startActionCableConnection() {
+    console.log("🔄 Starting Action Cable connection")
     
     try {
-      this.eventSource = new EventSource('/dashboard/stream')
-      
-      this.eventSource.onopen = (event) => {
-        console.log("✅ SSE connection opened")
-        this.showConnectedIndicator()
-      }
-      
-      this.eventSource.onmessage = (event) => {
-        console.log("📡 SSE message received")
-        this.handleSSEMessage(event.data)
-      }
-      
-      this.eventSource.onerror = (event) => {
-        console.error("❌ SSE connection error:", event)
-        this.showError("SSE connection lost")
-        this.stopSSEConnection()
+      // Subscribe to the dashboard updates channel
+      this.subscription = consumer.subscriptions.create("DashboardUpdatesChannel", {
+        connected: () => {
+          console.log("✅ Action Cable connection opened")
+          this.showConnectedIndicator()
+        },
         
-        // Try to reconnect after 5 seconds
-        setTimeout(() => {
-          if (this.autoRefreshValue) {
-            this.startSSEConnection()
-          }
-        }, 5000)
-      }
+        disconnected: () => {
+          console.log("❌ Action Cable connection closed")
+          this.showError("Action Cable connection lost")
+        },
+        
+        rejected: () => {
+          console.log("❌ Action Cable connection rejected")
+          this.showError("Action Cable connection rejected")
+        },
+        
+        received: (data) => {
+          console.log("📡 Action Cable message received:", data)
+          this.handleActionCableMessage(data)
+        }
+      })
+      
+      console.log("🔌 Action Cable subscription created:", this.subscription)
       
     } catch (error) {
-      console.error("❌ Error creating SSE connection:", error)
-      this.showError("Failed to establish SSE connection")
+      console.error("❌ Error creating Action Cable connection:", error)
+      this.showError("Failed to establish Action Cable connection")
     }
   }
 
-  stopSSEConnection() {
-    if (this.eventSource) {
-      console.log("⏹️ Stopping SSE connection")
-      this.eventSource.close()
-      this.eventSource = null
+  stopActionCableConnection() {
+    if (this.subscription) {
+      console.log("⏹️ Stopping Action Cable connection")
+      this.subscription.unsubscribe()
+      this.subscription = null
     }
   }
 
-  handleSSEMessage(data) {
+  handleActionCableMessage(data) {
     try {
-      const dashboardData = JSON.parse(data)
-      console.log("✅ Processing SSE data:", dashboardData.timestamp)
+      console.log("✅ Processing Action Cable data:", data.timestamp)
       
-      this.updateDashboardWithData(dashboardData)
+      this.updateDashboardWithData(data)
       this.updateLastRefreshTime()
       this.showSuccessIndicator()
       
     } catch (error) {
-      console.error("❌ Error parsing SSE data:", error)
+      console.error("❌ Error processing Action Cable data:", error)
     }
   }
 
   updateDashboardWithData(data) {
-    console.log("🔄 Updating dashboard with SSE data")
+    console.log("🔄 Updating dashboard with Action Cable data")
     
     try {
       // Update system status
@@ -120,9 +121,9 @@ export default class extends Controller {
         `).join('')
       }
       
-      console.log("✅ Dashboard updated successfully with SSE data")
+      console.log("✅ Dashboard updated successfully with Action Cable data")
     } catch (error) {
-      console.error("❌ Error updating dashboard with SSE data:", error)
+      console.error("❌ Error updating dashboard with Action Cable data:", error)
     }
   }
 
@@ -199,7 +200,7 @@ export default class extends Controller {
     const indicator = document.getElementById("auto-refresh-status")
     if (indicator) {
       indicator.style.backgroundColor = "#10b981"
-      indicator.querySelector(".status-text").textContent = "SSE connected"
+      indicator.querySelector(".status-text").textContent = "Action Cable connected"
     }
   }
 
@@ -208,7 +209,7 @@ export default class extends Controller {
     if (indicator) {
       const originalText = indicator.querySelector(".status-text").textContent
       indicator.style.backgroundColor = "#059669"
-      indicator.querySelector(".status-text").textContent = "Updated via SSE"
+      indicator.querySelector(".status-text").textContent = "Updated via Action Cable"
       
       setTimeout(() => {
         indicator.style.backgroundColor = "#10b981"
@@ -242,14 +243,14 @@ export default class extends Controller {
     }, 5000)
   }
 
-  // Toggle SSE connection
-  toggleSSE() {
+  // Toggle Action Cable connection
+  toggleActionCable() {
     this.autoRefreshValue = !this.autoRefreshValue
     
     if (this.autoRefreshValue) {
-      this.startSSEConnection()
+      this.startActionCableConnection()
     } else {
-      this.stopSSEConnection()
+      this.stopActionCableConnection()
     }
   }
 } 

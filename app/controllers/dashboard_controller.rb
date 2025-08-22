@@ -1,5 +1,4 @@
 class DashboardController < ApplicationController
-  include ActionController::Live
   layout 'dashboard'
   
   def index
@@ -20,32 +19,15 @@ class DashboardController < ApplicationController
     end
   end
 
-  def stream
-    # SSE endpoint for real-time updates
-    response.headers['Content-Type'] = 'text/event-stream'
-    response.headers['Cache-Control'] = 'no-cache'
-    response.headers['Connection'] = 'keep-alive'
-    response.headers['X-Accel-Buffering'] = 'no'
+  def test_action_cable
+    # Test Action Cable broadcast
+    ActionCable.server.broadcast("dashboard_updates", {
+      message: "Action Cable test",
+      timestamp: Time.current.strftime("%H:%M:%S"),
+      status: "working"
+    })
     
-    # Send initial data
-    load_dashboard_data
-    data = dashboard_data_json
-    response.stream.write("data: #{data.to_json}\n\n")
-    
-    # Send updates every 30 seconds
-    loop do
-      sleep 30
-      load_dashboard_data
-      data = dashboard_data_json
-      response.stream.write("data: #{data.to_json}\n\n")
-    rescue => e
-      Rails.logger.error "SSE Error: #{e.message}"
-      break
-    end
-  rescue => e
-    Rails.logger.error "SSE Stream Error: #{e.message}"
-  ensure
-    response.stream.close if response.stream
+    render json: { message: "Action Cable test broadcast sent" }
   end
 
   def stream_test

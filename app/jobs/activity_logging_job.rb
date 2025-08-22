@@ -4,72 +4,71 @@ class ActivityLoggingJob < ApplicationJob
   def perform
     Rails.logger.info "Starting activity logging job"
     
-    # Simulate various system activities
-    activities = generate_system_activities
+    # Generate random system activities
+    activities = [
+      { level: 'info', message: 'System check completed successfully' },
+      { level: 'warning', message: 'High memory usage detected' },
+      { level: 'error', message: 'Database connection timeout' },
+      { level: 'info', message: 'Backup process started' },
+      { level: 'warning', message: 'Disk space running low' }
+    ]
     
-    activities.each do |activity|
-      Activity.create!(
-        message: activity[:message],
-        level: activity[:level],
-        source: activity[:source],
-        timestamp: Time.current
-      )
-    end
+    # Select a random activity
+    activity = activities.sample
+    Activity.log_info(activity[:message]) if activity[:level] == 'info'
+    Activity.log_warning(activity[:message]) if activity[:level] == 'warning'
+    Activity.log_error(activity[:message]) if activity[:level] == 'error'
     
-    Rails.logger.info "Activity logging job completed"
+    # Broadcast update to all connected SSE clients
+    broadcast_dashboard_update
     
-    # Reschedule the job for the next execution
+    # Reschedule the job
     reschedule_job
   end
 
   private
 
-  def reschedule_job
-    # Schedule the next execution
-    self.class.set(wait: 2.minutes).perform_later
-    Rails.logger.info "Activity logging job rescheduled for 2 minutes from now"
+  def broadcast_dashboard_update
+    # Load fresh data
+    system_status = SystemStatus.current_status
+    cpu_metric = Metric.latest_by_category('cpu')
+    memory_metric = Metric.latest_by_category('memory')
+    disk_metric = Metric.latest_by_category('disk')
+    network_metric = Metric.latest_by_category('network')
+    recent_activities = Activity.latest(5)
+    response_time = rand(50..200)
+    
+    data = {
+      system_status: {
+        status: system_status.status,
+        uptime: system_status.formatted_uptime,
+        last_check: system_status.last_check.strftime("%H:%M:%S"),
+        message: system_status.details&.dig('message') || 'No status message'
+      },
+      metrics: {
+        cpu: cpu_metric ? "#{cpu_metric.value}#{cpu_metric.unit}" : '--',
+        memory: memory_metric ? "#{memory_metric.value}#{memory_metric.unit}" : '--',
+        disk: disk_metric ? "#{disk_metric.value}#{disk_metric.unit}" : '--',
+        network: network_metric ? "#{network_metric.value} #{network_metric.unit}" : '--',
+        response_time: "#{response_time}ms"
+      },
+      activities: recent_activities.map do |activity|
+        {
+          time: activity.formatted_time,
+          message: activity.message,
+          level: activity.level,
+          css_class: activity.css_class
+        }
+      end,
+      timestamp: Time.current.strftime("%H:%M:%S")
+    }
+    
+    # Broadcast to all connected clients
+    ActionCable.server.broadcast("dashboard_updates", data)
+    Rails.logger.info "Broadcasted dashboard update via Action Cable"
   end
 
-  def generate_system_activities
-    activities = []
-    
-    # Random chance to generate different types of activities
-    case rand(1..10)
-    when 1..3
-      # Normal info activities
-      activities << {
-        message: "System health check completed",
-        level: "info",
-        source: "health_check"
-      }
-    when 4..6
-      # Warning activities
-      activities << {
-        message: "High memory usage detected",
-        level: "warning",
-        source: "monitoring"
-      }
-    when 7..8
-      # Error activities (rare)
-      activities << {
-        message: "Database connection timeout",
-        level: "error",
-        source: "database"
-      }
-    when 9..10
-      # Multiple activities
-      activities << {
-        message: "Cache refreshed",
-        level: "info",
-        source: "cache"
-      }
-      activities << {
-        message: "Background job completed",
-        level: "info",
-        source: "jobs"
-      }
-    end
-    
-    activities
+  def reschedule_job
+    self.class.set(wait: 2.minutes).perform_later
   end
 end

@@ -4,76 +4,38 @@ class StatusCheckJob < ApplicationJob
   def perform
     Rails.logger.info "Starting status check job"
     
-    # Get current status
-    current_status = SystemStatus.current_status
+    # Get latest metrics to determine system health
+    cpu_metric = Metric.latest_by_category('cpu')
+    memory_metric = Metric.latest_by_category('memory')
     
-    # Check system health
-    health_status = check_system_health
+    # Determine system status based on metrics
+    new_status = determine_system_status(cpu_metric, memory_metric)
     
     # Update system status
-    SystemStatus.update_status(
-      status: health_status[:status],
-      uptime: health_status[:uptime],
-      details: health_status[:details]
-    )
+    SystemStatus.update_status(new_status)
     
-    # Log status change if significant
-    if health_status[:status] != current_status.status
-      Activity.log_warning(
-        "System status changed to #{health_status[:status]}",
-        source: "status_check_job"
-      )
+    # Log status change
+    if new_status != 'online'
+      Activity.log_warning("System status changed to #{new_status}")
     end
     
-    Rails.logger.info "Status check job completed"
+    # Broadcast update to all connected SSE clients
+    broadcast_dashboard_update
     
-    # Reschedule the job for the next execution
+    # Reschedule the job
     reschedule_job
   end
 
   private
 
-  def reschedule_job
-    # Schedule the next execution
-    self.class.set(wait: 30.seconds).perform_later
-    Rails.logger.info "Status check job rescheduled for 30 seconds from now"
-  end
-
-  def check_system_health
-    # Simulate system health check
-    cpu_metric = Metric.latest_by_category('cpu')
-    memory_metric = Metric.latest_by_category('memory')
-    
-    # Determine status based on metrics
-    status = determine_status(cpu_metric, memory_metric)
-    
-    # Calculate uptime (increment by job interval)
-    uptime = SystemStatus.current_status.uptime + 30 # 30 seconds
-    
-    # Prepare details
-    details = {
-      message: generate_status_message(status),
-      cpu_usage: cpu_metric&.value,
-      memory_usage: memory_metric&.value,
-      last_check: Time.current.iso8601
-    }
-    
-    {
-      status: status,
-      uptime: uptime,
-      details: details
-    }
-  end
-
-  def determine_status(cpu_metric, memory_metric)
+  def determine_system_status(cpu_metric, memory_metric)
     return 'offline' unless cpu_metric && memory_metric
     
-    cpu_usage = cpu_metric.value
-    memory_usage = memory_metric.value
+    cpu_usage = cpu_metric.value.to_f
+    memory_usage = memory_metric.value.to_f
     
-    # Determine status based on thresholds
     if cpu_usage > 90 || memory_usage > 95
-      'warning'
+      'offline'
     elsif cpu_usage > 70 || memory_usage > 80
       'warning'
     else
@@ -81,16 +43,47 @@ class StatusCheckJob < ApplicationJob
     end
   end
 
-  def generate_status_message(status)
-    case status
-    when 'online'
-      "System running normally"
-    when 'warning'
-      "System under moderate load"
-    when 'offline'
-      "System unavailable"
-    else
-      "System status unknown"
-    end
+  def broadcast_dashboard_update
+    # Load fresh data
+    system_status = SystemStatus.current_status
+    cpu_metric = Metric.latest_by_category('cpu')
+    memory_metric = Metric.latest_by_category('memory')
+    disk_metric = Metric.latest_by_category('disk')
+    network_metric = Metric.latest_by_category('network')
+    recent_activities = Activity.latest(5)
+    response_time = rand(50..200)
+    
+    data = {
+      system_status: {
+        status: system_status.status,
+        uptime: system_status.formatted_uptime,
+        last_check: system_status.last_check.strftime("%H:%M:%S"),
+        message: system_status.details&.dig('message') || 'No status message'
+      },
+      metrics: {
+        cpu: cpu_metric ? "#{cpu_metric.value}#{cpu_metric.unit}" : '--',
+        memory: memory_metric ? "#{memory_metric.value}#{memory_metric.unit}" : '--',
+        disk: disk_metric ? "#{disk_metric.value}#{disk_metric.unit}" : '--',
+        network: network_metric ? "#{network_metric.value} #{network_metric.unit}" : '--',
+        response_time: "#{response_time}ms"
+      },
+      activities: recent_activities.map do |activity|
+        {
+          time: activity.formatted_time,
+          message: activity.message,
+          level: activity.level,
+          css_class: activity.css_class
+        }
+      end,
+      timestamp: Time.current.strftime("%H:%M:%S")
+    }
+    
+    # Broadcast to all connected clients
+    ActionCable.server.broadcast("dashboard_updates", data)
+    Rails.logger.info "Broadcasted dashboard update via Action Cable"
+  end
+
+  def reschedule_job
+    self.class.set(wait: 30.seconds).perform_later
   end
 end
