@@ -1,0 +1,98 @@
+<% content_for :title, "SSE Dashboard Test" %>
+
+<div id="dashboard-content" data-sse-dashboard-target="content">
+  <div class="dashboard-header">
+    <h2>SSE Dashboard Test</h2>
+    <p class="dashboard-subtitle">Server-Sent Events for real-time updates</p>
+    <div class="auto-refresh-indicator" id="auto-refresh-status">
+      <span class="status-dot"></span>
+      <span class="status-text">SSE connecting...</span>
+    </div>
+  </div>
+
+  <div class="dashboard-grid">
+    <!-- System Status Card -->
+    <div class="dashboard-card status-card">
+      <div class="card-header">
+        <h3>System Status</h3>
+        <span class="status-indicator online">Online</span>
+      </div>
+      <div class="card-content">
+        <div class="status-item">
+          <span class="label">Uptime:</span>
+          <span class="value" id="uptime">Loading...</span>
+        </div>
+        <div class="status-item">
+          <span class="label">Last Updated:</span>
+          <span class="value" id="last-updated">Loading...</span>
+        </div>
+        <div class="status-item">
+          <span class="label">Status:</span>
+          <span class="value">Loading...</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Performance Metrics Card -->
+    <div class="dashboard-card metrics-card">
+      <div class="card-header">
+        <h3>Performance</h3>
+      </div>
+      <div class="card-content" id="metrics-content">
+        <div class="metric-item">
+          <span class="label">CPU Usage:</span>
+          <span class="value" id="cpu-usage">Loading...</span>
+        </div>
+        <div class="metric-item">
+          <span class="label">Memory Usage:</span>
+          <span class="value" id="memory-usage">Loading...</span>
+        </div>
+        <div class="metric-item">
+          <span class="label">Disk Usage:</span>
+          <span class="value" id="disk-usage">Loading...</span>
+        </div>
+        <div class="metric-item">
+          <span class="label">Network:</span>
+          <span class="value" id="network-usage">Loading...</span>
+        </div>
+        <div class="metric-item">
+          <span class="label">Response Time:</span>
+          <span class="value" id="response-time">Loading...</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Activity Feed Card -->
+    <div class="dashboard-card activity-card">
+      <div class="card-header">
+        <h3>Recent Activity</h3>
+      </div>
+      <div class="card-content">
+        <div class="activity-list" id="activity-feed">
+          <div class="activity-item">
+            <span class="activity-time">--:--</span>
+            <span class="activity-text">Loading activities...</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick Actions Card -->
+    <div class="dashboard-card actions-card">
+      <div class="card-header">
+        <h3>Quick Actions</h3>
+      </div>
+      <div class="card-content">
+        <button class="action-btn" id="refresh-btn" data-sse-dashboard-target="refreshBtn">Refresh Data</button>
+        <button class="action-btn" id="toggle-sse-btn">Toggle SSE</button>
+        <button class="action-btn" id="test-connection-btn">Test Connection</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="dashboard-footer-info">
+    <p>Dashboard updates via Server-Sent Events (no polling)</p>
+    <p>Check browser console (F12) to see SSE messages</p>
+    <p>Last data refresh: Loading...</p>
+  </div>
+</div> 

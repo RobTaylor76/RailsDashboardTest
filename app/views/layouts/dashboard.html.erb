@@ -14,11 +14,11 @@
     <link rel="icon" href="/icon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="/icon.png">
 
-    <%= stylesheet_link_tag :app, "data-turbo-track": "reload" %>
+    <%= stylesheet_link_tag "application", "data-turbo-track": "reload" %>
     <%= javascript_importmap_tags %>
   </head>
 
-  <body class="dashboard-body" data-controller="dashboard">
+  <body class="dashboard-body" data-controller="<%= controller.action_name == 'sse_test' ? 'sse-dashboard' : 'dashboard' %>">
     <nav class="dashboard-nav">
       <div class="nav-container">
         <div class="nav-brand">
@@ -26,6 +26,7 @@
         </div>
         <div class="nav-menu">
           <a href="/" class="nav-link">Dashboard</a>
+          <a href="/dashboard/sse-test" class="nav-link">SSE Test</a>
           <a href="/dashboard/metrics" class="nav-link">Metrics</a>
         </div>
       </div>
