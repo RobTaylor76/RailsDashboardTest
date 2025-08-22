@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title><%= content_for(:title) || "Live Dashboard" %></title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <%= csrf_meta_tags %>
+    <%= csp_meta_tag %>
+
+    <%= yield :head %>
+
+    <link rel="icon" href="/icon.png" type="image/png">
+    <link rel="icon" href="/icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="/icon.png">
+
+    <%= stylesheet_link_tag :app, "data-turbo-track": "reload" %>
+    <%= javascript_importmap_tags %>
+  </head>
+
+  <body class="dashboard-body">
+    <nav class="dashboard-nav">
+      <div class="nav-container">
+        <div class="nav-brand">
+          <h1>Live Dashboard</h1>
+        </div>
+        <div class="nav-menu">
+          <a href="/" class="nav-link">Dashboard</a>
+          <a href="/dashboard/metrics" class="nav-link">Metrics</a>
+        </div>
+      </div>
+    </nav>
+
+    <main class="dashboard-main">
+      <div class="dashboard-container">
+        <%= yield %>
+      </div>
+    </main>
+
+    <footer class="dashboard-footer">
+      <div class="footer-container">
+        <p>&copy; <%= Date.current.year %> Live Dashboard</p>
+      </div>
+    </footer>
+  </body>
+</html> 
