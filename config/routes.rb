@@ -12,5 +12,6 @@ Rails.application.routes.draw do
   # Dashboard routes
   root "dashboard#index"
   get "dashboard", to: "dashboard#index"
+  get "dashboard/refresh", to: "dashboard#refresh"
   get "dashboard/metrics", to: "dashboard#metrics"
 end

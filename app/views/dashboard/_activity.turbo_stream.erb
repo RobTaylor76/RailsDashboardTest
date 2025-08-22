@@ -1,0 +1,14 @@
+<%= turbo_stream.update "activity-feed" do %>
+  <% @recent_activities.each do |activity| %>
+    <div class="activity-item <%= activity.css_class %>">
+      <span class="activity-time"><%= activity.formatted_time %></span>
+      <span class="activity-text"><%= activity.message %></span>
+    </div>
+  <% end %>
+  <% if @recent_activities.empty? %>
+    <div class="activity-item">
+      <span class="activity-time"><%= Time.current.strftime("%H:%M") %></span>
+      <span class="activity-text">No recent activity</span>
+    </div>
+  <% end %>
+<% end %> 

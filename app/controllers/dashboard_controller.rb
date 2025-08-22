@@ -2,6 +2,31 @@ class DashboardController < ApplicationController
   layout 'dashboard'
   
   def index
+    load_dashboard_data
+    
+    respond_to do |format|
+      format.html
+      format.turbo_stream
+    end
+  end
+
+  def refresh
+    load_dashboard_data
+    
+    respond_to do |format|
+      format.turbo_stream { render :index }
+    end
+  end
+
+  def metrics
+    # This will serve real-time metrics data
+    # We'll implement this in Phase 3
+    @metrics = Metric.recent.limit(20)
+  end
+
+  private
+
+  def load_dashboard_data
     # Fetch current system status
     @system_status = SystemStatus.current_status
     
@@ -16,11 +41,5 @@ class DashboardController < ApplicationController
     
     # Calculate response time (simulated for now)
     @response_time = rand(50..200) # milliseconds
-  end
-
-  def metrics
-    # This will serve real-time metrics data
-    # We'll implement this in Phase 3
-    @metrics = Metric.recent.limit(20)
   end
 end 

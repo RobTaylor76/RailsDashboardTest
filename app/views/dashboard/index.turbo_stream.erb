@@ -1,6 +1,4 @@
-<% content_for :title, "Live Dashboard" %>
-
-<div id="dashboard-content" data-dashboard-target="content">
+<%= turbo_stream.update "dashboard-content" do %>
   <div class="dashboard-header">
     <h2>System Overview</h2>
     <p class="dashboard-subtitle">Real-time monitoring and metrics</p>
@@ -34,7 +32,7 @@
       <div class="card-header">
         <h3>Performance</h3>
       </div>
-      <div class="card-content" id="metrics-content">
+      <div class="card-content">
         <%= render 'metrics' %>
       </div>
     </div>
@@ -68,7 +66,7 @@
         <h3>Quick Actions</h3>
       </div>
       <div class="card-content">
-        <button class="action-btn" id="refresh-btn" data-dashboard-target="refreshBtn">Refresh Data</button>
+        <button class="action-btn" id="refresh-btn">Refresh Data</button>
         <button class="action-btn" id="export-btn">Export Report</button>
         <button class="action-btn" id="settings-btn">Settings</button>
       </div>
@@ -79,4 +77,4 @@
     <p>Dashboard updates automatically every 30 seconds</p>
     <p>Last data refresh: <%= Time.current.strftime("%H:%M:%S") %></p>
   </div>
-</div> 
+<% end %> 
