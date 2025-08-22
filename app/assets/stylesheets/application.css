@@ -239,6 +239,24 @@ body {
   color: var(--text-primary);
 }
 
+/* Activity Level Styles */
+.activity-info {
+  border-left: 3px solid var(--primary-color);
+  padding-left: 0.5rem;
+}
+
+.activity-warning {
+  border-left: 3px solid var(--warning-color);
+  padding-left: 0.5rem;
+  background-color: #fef3c7;
+}
+
+.activity-error {
+  border-left: 3px solid var(--danger-color);
+  padding-left: 0.5rem;
+  background-color: #fee2e2;
+}
+
 /* Action Buttons */
 .action-btn {
   display: block;
@@ -289,6 +307,10 @@ body {
   color: var(--text-secondary);
   font-size: 0.875rem;
   margin-top: 1rem;
+}
+
+.dashboard-footer-info p {
+  margin: 0.25rem 0;
 }
 
 /* Metrics Page */

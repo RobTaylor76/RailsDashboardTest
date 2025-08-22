@@ -1,0 +1,13 @@
+# Read about fixtures at https://api.rubyonrails.org/classes/ActiveRecord/FixtureSet.html
+
+one:
+  message: MyText
+  level: MyString
+  source: MyString
+  timestamp: 2025-08-22 21:18:52
+
+two:
+  message: MyText
+  level: MyString
+  source: MyString
+  timestamp: 2025-08-22 21:18:52

@@ -10,8 +10,35 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 0) do
+ActiveRecord::Schema[8.0].define(version: 2025_08_22_201908) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
+  create_table "activities", force: :cascade do |t|
+    t.text "message"
+    t.string "level"
+    t.string "source"
+    t.datetime "timestamp"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+  end
+
+  create_table "metrics", force: :cascade do |t|
+    t.string "name"
+    t.decimal "value"
+    t.string "unit"
+    t.string "category"
+    t.datetime "timestamp"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+  end
+
+  create_table "system_statuses", force: :cascade do |t|
+    t.string "status"
+    t.integer "uptime"
+    t.datetime "last_check"
+    t.jsonb "details"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+  end
 end

@@ -1,0 +1,28 @@
+<div class="metric-item">
+  <span class="label">CPU Usage:</span>
+  <span class="value" id="cpu-usage">
+    <%= @cpu_metric ? "#{@cpu_metric.value}#{@cpu_metric.unit}" : '--' %>
+  </span>
+</div>
+<div class="metric-item">
+  <span class="label">Memory Usage:</span>
+  <span class="value" id="memory-usage">
+    <%= @memory_metric ? "#{@memory_metric.value}#{@memory_metric.unit}" : '--' %>
+  </span>
+</div>
+<div class="metric-item">
+  <span class="label">Disk Usage:</span>
+  <span class="value" id="disk-usage">
+    <%= @disk_metric ? "#{@disk_metric.value}#{@disk_metric.unit}" : '--' %>
+  </span>
+</div>
+<div class="metric-item">
+  <span class="label">Network:</span>
+  <span class="value" id="network-usage">
+    <%= @network_metric ? "#{@network_metric.value} #{@network_metric.unit}" : '--' %>
+  </span>
+</div>
+<div class="metric-item">
+  <span class="label">Response Time:</span>
+  <span class="value" id="response-time"><%= @response_time %>ms</span>
+</div> 
