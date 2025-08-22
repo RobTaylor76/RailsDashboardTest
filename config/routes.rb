@@ -13,5 +13,6 @@ Rails.application.routes.draw do
   root "dashboard#index"
   get "dashboard", to: "dashboard#index"
   get "dashboard/refresh", to: "dashboard#refresh"
+  get "dashboard/trigger-jobs", to: "dashboard#trigger_jobs"
   get "dashboard/metrics", to: "dashboard#metrics"
 end

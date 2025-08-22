@@ -18,6 +18,15 @@ class DashboardController < ApplicationController
     end
   end
 
+  def trigger_jobs
+    # Manually trigger jobs for testing
+    MetricCollectionJob.perform_later
+    ActivityLoggingJob.perform_later
+    StatusCheckJob.perform_later
+    
+    redirect_to root_path, notice: "Background jobs triggered successfully"
+  end
+
   def metrics
     # This will serve real-time metrics data
     # We'll implement this in Phase 3
