@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+
+echo "Starting Rails web server..."
+echo "Environment: $RAILS_ENV"
+echo "Process ID: $$"
+
+# Start the Rails server
+exec bin/rails server -p 3000

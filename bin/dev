@@ -1,2 +1,15 @@
-#!/usr/bin/env ruby
-exec "./bin/rails", "server", *ARGV
+#!/usr/bin/env bash
+
+# Check if foreman is installed
+if ! command -v foreman &> /dev/null; then
+    echo "Installing foreman..."
+    gem install foreman
+fi
+
+# Run both web and worker processes
+echo "Starting development environment with separate web and worker processes..."
+echo "Web server will run on http://localhost:3000"
+echo "Worker process will handle background jobs"
+echo ""
+
+foreman start -f Procfile

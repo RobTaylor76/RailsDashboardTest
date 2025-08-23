@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+
+echo "Starting Solid Queue worker..."
+echo "Environment: $RAILS_ENV"
+echo "Process ID: $$"
+
+# Start the worker using the built-in jobs command
+exec bin/jobs start --config-file=config/queue.yml
