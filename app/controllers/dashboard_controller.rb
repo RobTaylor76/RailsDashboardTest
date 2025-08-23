@@ -23,7 +23,7 @@ class DashboardController < ApplicationController
   end
 
   def stream
-    # SSE endpoint for real-time updates
+    # SSE endpoint for real-time updates using direct Redis pub/sub
     response.headers['Content-Type'] = 'text/event-stream'
     response.headers['Cache-Control'] = 'no-cache'
     response.headers['Connection'] = 'keep-alive'
@@ -34,16 +34,47 @@ class DashboardController < ApplicationController
     data = dashboard_data_json
     response.stream.write("data: #{data.to_json}\n\n")
     
-    # Keep connection alive and send periodic updates
-    # Background jobs will trigger updates via a different mechanism
-    loop do
-      sleep 10 # Send updates every 30 seconds
-      load_dashboard_data
-      data = dashboard_data_json
-      response.stream.write("data: #{data.to_json}\n\n")
-    rescue => e
-      Rails.logger.error "SSE Error: #{e.message}"
-      break
+    # Subscribe directly to Redis pub/sub for this connection
+    pubsub_service = PubsubService.instance
+    
+    if pubsub_service.instance_variable_get(:@backend) == :redis
+      # Create a dedicated Redis connection for this stream
+      redis = Redis.new(url: ENV.fetch('REDIS_URL', 'redis://localhost:6379'))
+      pubsub = redis.dup
+      
+      begin
+        # Subscribe to dashboard_updates channel
+        pubsub.subscribe('dashboard_updates') do |on|
+          on.message do |channel, message|
+            begin
+              data = JSON.parse(message)
+              response.stream.write("data: #{data.to_json}\n\n")
+            rescue => e
+              Rails.logger.error "Error processing Redis message: #{e.message}"
+            end
+          end
+        end
+      rescue => e
+        Rails.logger.error "Redis pub/sub error: #{e.message}"
+      ensure
+        pubsub.close
+        redis.close
+      end
+    else
+      # Fallback to database polling if Redis is not available
+      last_event_id = 0
+      loop do
+        sleep 1 # Poll every second
+        
+        events = pubsub_service.poll_events('dashboard_updates', last_event_id)
+        events.each do |event|
+          response.stream.write("data: #{event.data.to_json}\n\n")
+          last_event_id = event.id
+        end
+      rescue => e
+        Rails.logger.error "Database pub/sub error: #{e.message}"
+        sleep 5 # Wait longer on error
+      end
     end
   rescue => e
     Rails.logger.error "SSE Stream Error: #{e.message}"
@@ -86,6 +117,17 @@ class DashboardController < ApplicationController
     redirect_to root_path, notice: "Background jobs triggered successfully"
   end
 
+  def trigger_test_pubsub
+    # Trigger the test pub/sub job
+    TestPubsubJob.perform_later
+    
+    render json: { 
+      message: "Test pub/sub job triggered successfully",
+      timestamp: Time.current.strftime("%H:%M:%S"),
+      sse_connections: SseManager.instance.stats[:total_connections]
+    }
+  end
+
   def test_auto_refresh
     # Simple test page to verify auto-refresh
     @current_time = Time.current.strftime("%H:%M:%S")
@@ -94,12 +136,32 @@ class DashboardController < ApplicationController
 
   def debug
     # Debug endpoint to check if everything is working
+    begin
+      sse_manager = SseManager.instance
+      sse_stats = sse_manager.stats
+    rescue => e
+      sse_stats = { total_connections: 0, connections: [] }
+      Rails.logger.warn "Could not get SSE stats: #{e.message}"
+    end
+    
+    begin
+      pubsub_service = PubsubService.instance
+      pubsub_backend = pubsub_service.instance_variable_get(:@backend)
+    rescue => e
+      pubsub_backend = :unknown
+      Rails.logger.warn "Could not get pub/sub backend: #{e.message}"
+    end
+    
     @debug_info = {
       current_time: Time.current.strftime("%H:%M:%S"),
       system_status: SystemStatus.current_status.last_check.strftime("%H:%M:%S"),
       metrics_count: Metric.count,
       activities_count: Activity.count,
-      jobs_running: true
+      jobs_running: true,
+      services_loaded: defined?(SseManager) ? "Yes" : "No",
+      sse_connections: sse_stats,
+      pubsub_backend: pubsub_backend,
+      pubsub_events_count: PubsubEvent.count
     }
   end
 

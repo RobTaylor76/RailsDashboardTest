@@ -88,22 +88,9 @@ class StatusCheckJob < ApplicationJob
   end
 
   def push_to_sse_clients(data)
-    # For development with memory store, we'll just log the data
-    # In production with Redis, this would push to connected SSE clients
-    Rails.logger.info "SSE Update: #{data.to_json}"
-    
-    # Note: In a production environment with Redis, this would be:
-    # Rails.cache.redis.keys("sse_connection_*").each do |key|
-    #   begin
-    #     stream = Rails.cache.read(key)
-    #     if stream && stream.respond_to?(:write)
-    #       stream.write("data: #{data.to_json}\n\n")
-    #     end
-    #   rescue => e
-    #     Rails.logger.error "Error pushing to SSE client #{key}: #{e.message}"
-    #     Rails.cache.delete(key)
-    #   end
-    # end
+    # Publish to pub/sub service for cross-process communication
+    pubsub_service = PubsubService.instance
+    pubsub_service.publish('dashboard_updates', data)
   end
 
   def reschedule_job

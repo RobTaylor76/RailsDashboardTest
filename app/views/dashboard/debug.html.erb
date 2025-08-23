@@ -36,6 +36,14 @@
           <span class="label">Jobs Running:</span>
           <span class="value"><%= @debug_info[:jobs_running] ? "Yes" : "No" %></span>
         </div>
+        <div class="metric-item">
+          <span class="label">Pub/Sub Backend:</span>
+          <span class="value"><%= @debug_info[:pubsub_backend] || "Not configured" %></span>
+        </div>
+        <div class="metric-item">
+          <span class="label">Pub/Sub Events:</span>
+          <span class="value"><%= @debug_info[:pubsub_events_count] || 0 %></span>
+        </div>
       </div>
     </div>
 
@@ -59,6 +67,30 @@
         <div class="metric-item">
           <span class="label">Console Messages:</span>
           <span class="value">Check browser console (F12)</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="dashboard-card">
+      <div class="card-header">
+        <h3>Pub/Sub System</h3>
+      </div>
+      <div class="card-content">
+        <div class="metric-item">
+          <span class="label">SSE Connections:</span>
+          <span class="value"><%= @debug_info[:sse_connections]&.dig(:total_connections) || 0 %></span>
+        </div>
+        <div class="metric-item">
+          <span class="label">Active Connections:</span>
+          <span class="value"><%= @debug_info[:sse_connections]&.dig(:connections)&.length || 0 %></span>
+        </div>
+        <div class="metric-item">
+          <span class="label">Redis Status:</span>
+          <span class="value"><%= @debug_info[:pubsub_backend] == :redis ? "Connected" : "Not available" %></span>
+        </div>
+        <div class="metric-item">
+          <span class="label">Database Events:</span>
+          <span class="value"><%= @debug_info[:pubsub_events_count] || 0 %></span>
         </div>
       </div>
     </div>

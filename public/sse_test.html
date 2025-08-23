@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>SSE Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        #messages { border: 1px solid #ccc; padding: 10px; height: 400px; overflow-y: scroll; }
+        .message { margin: 5px 0; padding: 5px; background: #f0f0f0; }
+        .error { background: #ffebee; color: #c62828; }
+        .success { background: #e8f5e8; color: #2e7d32; }
+        .info { background: #e3f2fd; color: #1565c0; }
+    </style>
+</head>
+<body>
+    <h1>SSE Connection Test</h1>
+    <button onclick="connect()">Connect to SSE</button>
+    <button onclick="disconnect()">Disconnect</button>
+    <button onclick="clearMessages()">Clear Messages</button>
+    <div id="status">Not connected</div>
+    <div id="messages"></div>
+
+    <script>
+        let eventSource = null;
+        let messageCount = 0;
+
+        function addMessage(text, type = 'info') {
+            const messages = document.getElementById('messages');
+            const message = document.createElement('div');
+            message.className = `message ${type}`;
+            message.textContent = `[${new Date().toLocaleTimeString()}] ${text}`;
+            messages.appendChild(message);
+            messages.scrollTop = messages.scrollHeight;
+            messageCount++;
+        }
+
+        function clearMessages() {
+            document.getElementById('messages').innerHTML = '';
+            messageCount = 0;
+        }
+
+        function connect() {
+            if (eventSource) {
+                addMessage('Already connected!', 'error');
+                return;
+            }
+
+            addMessage('🔗 Connecting to SSE stream...', 'info');
+            document.getElementById('status').textContent = 'Connecting...';
+
+            try {
+                eventSource = new EventSource('/dashboard/stream');
+
+                eventSource.onopen = function(event) {
+                    addMessage('✅ SSE connection opened', 'success');
+                    document.getElementById('status').textContent = 'Connected';
+                };
+
+                eventSource.onmessage = function(event) {
+                    try {
+                        const data = JSON.parse(event.data);
+                        addMessage(`📨 Received: ${JSON.stringify(data, null, 2)}`, 'success');
+                    } catch (e) {
+                        addMessage(`📨 Received raw data: ${event.data}`, 'success');
+                    }
+                };
+
+                eventSource.onerror = function(event) {
+                    addMessage('❌ SSE connection error', 'error');
+                    document.getElementById('status').textContent = 'Error';
+                    console.error('SSE Error:', event);
+                };
+
+            } catch (error) {
+                addMessage(`❌ Failed to create EventSource: ${error.message}`, 'error');
+                document.getElementById('status').textContent = 'Failed to connect';
+            }
+        }
+
+        function disconnect() {
+            if (eventSource) {
+                eventSource.close();
+                eventSource = null;
+                addMessage('🔌 SSE connection closed', 'info');
+                document.getElementById('status').textContent = 'Disconnected';
+            } else {
+                addMessage('Not connected', 'error');
+            }
+        }
+
+        // Auto-connect on page load
+        window.addEventListener('load', function() {
+            addMessage('🚀 Page loaded, ready to test SSE', 'info');
+        });
+
+        // Clean up on page unload
+        window.addEventListener('beforeunload', function() {
+            if (eventSource) {
+                eventSource.close();
+            }
+        });
+    </script>
+</body>
+</html>

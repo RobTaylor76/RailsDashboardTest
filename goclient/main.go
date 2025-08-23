@@ -238,7 +238,7 @@ func main() {
 		url        = flag.String("url", "http://localhost:3000/dashboard/stream", "SSE endpoint URL")
 		numClients = flag.Int("clients", 1, "Number of concurrent SSE clients")
 		showStats  = flag.Bool("stats", false, "Show periodic statistics")
-		timeout    = flag.Duration("timeout", 30*time.Second, "Connection timeout (0 = no timeout)")
+		timeout    = flag.Duration("timeout", 60*time.Second, "Connection timeout (0 = no timeout)")
 	)
 	flag.Parse()
 

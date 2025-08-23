@@ -9,6 +9,7 @@ Executable scripts for running the Rails application with separate web and backg
 | `./bin/dev` | **Start both web + worker** | Development (recommended) |
 | `./bin/web` | Start web server only | Production web server |
 | `./bin/worker` | Start worker only | Production worker |
+| `./bin/redis start` | Start Redis for pub/sub | Development/production |
 | `foreman start` | Start both with Foreman | Alternative to `./bin/dev` |
 
 ## 📋 Scripts Overview
@@ -46,21 +47,32 @@ Executable scripts for running the Rails application with separate web and backg
 - Custom application tasks
 - Usage: `./bin/rake [task]`
 
+**`bin/redis`** - Redis management
+- Start/stop Redis for pub/sub system
+- Usage: `./bin/redis {start|stop|status|test}`
+
 ## 🛠 Usage Patterns
 
 ### Development
 
 **Easiest way:**
 ```bash
+# Start Redis first
+./bin/redis start
+
+# Then start the application
 ./bin/dev
 ```
 
 **Manual control:**
 ```bash
-# Terminal 1
+# Terminal 1 - Start Redis
+./bin/redis start
+
+# Terminal 2 - Web server
 ./bin/web
 
-# Terminal 2  
+# Terminal 3 - Worker
 ./bin/worker
 ```
 
@@ -100,6 +112,15 @@ worker: ./bin/worker
 - **Database**: PostgreSQL
 - **Jobs**: `app/jobs/`
 
+### Pub/Sub System
+- **Unified Service**: `app/services/pubsub_service.rb` - Cross-process communication
+- **Redis Backend**: Real-time pub/sub (preferred, requires Redis)
+- **Database Backend**: Polling-based pub/sub (fallback, no Redis required)
+- **SSE Manager**: `app/services/sse_manager.rb` - Manages SSE connections
+- **ActionCable**: WebSocket support for real-time updates
+- **Background Jobs**: Generate data and trigger broadcasts
+- **Cross-Process**: Works with separate web/worker processes and servers
+
 ## 📊 Monitoring
 
 ### Process Management
@@ -129,6 +150,41 @@ bin/rails console
 
 # View logs
 tail -f log/development.log
+```
+
+### Redis Management
+```bash
+# Start Redis
+./bin/redis start
+
+# Check Redis status
+./bin/redis status
+
+# Test Redis pub/sub
+./bin/redis test
+
+# Stop Redis
+./bin/redis stop
+
+# View Redis logs
+./bin/redis logs
+```
+
+### Test Pub/Sub System
+```bash
+# Trigger test job (broadcasts to SSE and WebSocket)
+curl http://localhost:3000/dashboard/trigger-test-pubsub
+
+# Check SSE connections and pub/sub status
+curl http://localhost:3000/dashboard/debug | jq '.sse_connections, .pubsub_backend, .pubsub_events_count'
+
+# Monitor logs for broadcasts
+tail -f log/development.log | grep -E "(SSE|WebSocket|broadcast|pub/sub)"
+
+# Check pub/sub events in database
+bin/rails console
+> PubsubEvent.count
+> PubsubEvent.last
 ```
 
 

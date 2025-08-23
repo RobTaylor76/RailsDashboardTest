@@ -1,0 +1,113 @@
+#!/usr/bin/env bash
+
+# Redis management script for dashboard application
+
+set -e
+
+REDIS_CONTAINER="redis-dashboard"
+REDIS_PORT="6379"
+
+case "$1" in
+  start)
+    echo "🚀 Starting Redis..."
+    if [ -f "docker-compose.yml" ]; then
+      docker-compose up -d redis
+    else
+      docker run -d --name $REDIS_CONTAINER -p $REDIS_PORT:6379 redis:7-alpine
+    fi
+    echo "✅ Redis started on port $REDIS_PORT"
+    ;;
+    
+  stop)
+    echo "🛑 Stopping Redis..."
+    if [ -f "docker-compose.yml" ]; then
+      docker-compose stop redis
+    else
+      docker stop $REDIS_CONTAINER 2>/dev/null || echo "Redis container not running"
+    fi
+    echo "✅ Redis stopped"
+    ;;
+    
+  restart)
+    echo "🔄 Restarting Redis..."
+    $0 stop
+    sleep 2
+    $0 start
+    ;;
+    
+  status)
+    echo "📊 Redis Status:"
+    if [ -f "docker-compose.yml" ]; then
+      docker-compose ps redis
+    else
+      docker ps --filter "name=$REDIS_CONTAINER" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+    fi
+    
+    echo ""
+    echo "🔍 Testing connection..."
+    if docker exec $REDIS_CONTAINER redis-cli ping 2>/dev/null; then
+      echo "✅ Redis is responding"
+    else
+      echo "❌ Redis is not responding"
+    fi
+    ;;
+    
+  test)
+    echo "🧪 Testing Redis connection..."
+    if docker exec $REDIS_CONTAINER redis-cli ping 2>/dev/null; then
+      echo "✅ Redis connection successful"
+      
+      # Test pub/sub
+      echo "📡 Testing pub/sub..."
+      docker exec $REDIS_CONTAINER redis-cli PUBLISH test_channel "Hello from Redis!"
+      echo "✅ Pub/sub test completed"
+    else
+      echo "❌ Redis connection failed"
+      exit 1
+    fi
+    ;;
+    
+  logs)
+    echo "📋 Redis logs:"
+    if [ -f "docker-compose.yml" ]; then
+      docker-compose logs redis
+    else
+      docker logs $REDIS_CONTAINER
+    fi
+    ;;
+    
+  shell)
+    echo "🐚 Opening Redis CLI..."
+    docker exec -it $REDIS_CONTAINER redis-cli
+    ;;
+    
+  flush)
+    echo "🗑️  Flushing Redis data..."
+    docker exec $REDIS_CONTAINER redis-cli FLUSHALL
+    echo "✅ Redis data flushed"
+    ;;
+    
+  info)
+    echo "ℹ️  Redis information:"
+    docker exec $REDIS_CONTAINER redis-cli INFO | head -20
+    ;;
+    
+  *)
+    echo "Usage: $0 {start|stop|restart|status|test|logs|shell|flush|info}"
+    echo ""
+    echo "Commands:"
+    echo "  start   - Start Redis container"
+    echo "  stop    - Stop Redis container"
+    echo "  restart - Restart Redis container"
+    echo "  status  - Show Redis status and test connection"
+    echo "  test    - Test Redis connection and pub/sub"
+    echo "  logs    - Show Redis logs"
+    echo "  shell   - Open Redis CLI"
+    echo "  flush   - Flush all Redis data"
+    echo "  info    - Show Redis information"
+    echo ""
+    echo "Environment:"
+    echo "  REDIS_URL=redis://localhost:6379 (default)"
+    exit 1
+    ;;
+esac
