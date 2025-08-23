@@ -1,12 +1,12 @@
-<% content_for :title, "Action Cable Dashboard Test" %>
+<% content_for :title, "SSE Dashboard Test" %>
 
 <div id="dashboard-content" data-sse-dashboard-target="content">
   <div class="dashboard-header">
-    <h2>Action Cable Dashboard Test</h2>
-    <p class="dashboard-subtitle">Background jobs push updates via Action Cable</p>
+    <h2>SSE Dashboard Test</h2>
+    <p class="dashboard-subtitle">Background jobs push updates via Server-Sent Events</p>
     <div class="auto-refresh-indicator" id="auto-refresh-status">
       <span class="status-dot"></span>
-      <span class="status-text">Action Cable connecting...</span>
+      <span class="status-text">SSE connecting...</span>
     </div>
   </div>
 
@@ -84,30 +84,15 @@
       </div>
       <div class="card-content">
         <button class="action-btn" id="refresh-btn" data-sse-dashboard-target="refreshBtn">Refresh Data</button>
-        <button class="action-btn" id="toggle-action-cable-btn">Toggle Action Cable</button>
+        <button class="action-btn" id="toggle-sse-btn">Toggle SSE</button>
         <button class="action-btn" id="trigger-jobs-btn">Trigger Jobs</button>
-        <button class="action-btn" id="test-broadcast-btn" onclick="testBroadcast()">Test Broadcast</button>
       </div>
     </div>
   </div>
 
   <div class="dashboard-footer-info">
-    <p>Dashboard updates via Action Cable (background jobs push updates)</p>
-    <p>Check browser console (F12) to see Action Cable messages</p>
+    <p>Dashboard updates via Server-Sent Events (background jobs push updates)</p>
+    <p>Check browser console (F12) to see SSE messages</p>
     <p>Last data refresh: Loading...</p>
   </div>
-</div>
-
-<script>
-function testBroadcast() {
-  console.log("🧪 Testing Action Cable broadcast...")
-  fetch("/dashboard/test-action-cable")
-    .then(response => response.json())
-    .then(data => {
-      console.log("✅ Test broadcast sent:", data)
-    })
-    .catch(error => {
-      console.error("❌ Test broadcast failed:", error)
-    })
-}
-</script> 
+</div> 

@@ -1,0 +1,113 @@
+<% content_for :title, "WebSocket Dashboard Test" %>
+
+<div id="dashboard-content" data-websocket-dashboard-target="content">
+  <div class="dashboard-header">
+    <h2>WebSocket Dashboard Test</h2>
+    <p class="dashboard-subtitle">Background jobs push updates via Action Cable (WebSockets)</p>
+    <div class="auto-refresh-indicator" id="auto-refresh-status">
+      <span class="status-dot"></span>
+      <span class="status-text">WebSocket connecting...</span>
+    </div>
+  </div>
+
+  <div class="dashboard-grid">
+    <!-- System Status Card -->
+    <div class="dashboard-card status-card">
+      <div class="card-header">
+        <h3>System Status</h3>
+        <span class="status-indicator online">Online</span>
+      </div>
+      <div class="card-content">
+        <div class="status-item">
+          <span class="label">Uptime:</span>
+          <span class="value" id="uptime">Loading...</span>
+        </div>
+        <div class="status-item">
+          <span class="label">Last Updated:</span>
+          <span class="value" id="last-updated">Loading...</span>
+        </div>
+        <div class="status-item">
+          <span class="label">Status:</span>
+          <span class="value">Loading...</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Performance Metrics Card -->
+    <div class="dashboard-card metrics-card">
+      <div class="card-header">
+        <h3>Performance</h3>
+      </div>
+      <div class="card-content" id="metrics-content">
+        <div class="metric-item">
+          <span class="label">CPU Usage:</span>
+          <span class="value" id="cpu-usage">Loading...</span>
+        </div>
+        <div class="metric-item">
+          <span class="label">Memory Usage:</span>
+          <span class="value" id="memory-usage">Loading...</span>
+        </div>
+        <div class="metric-item">
+          <span class="label">Disk Usage:</span>
+          <span class="value" id="disk-usage">Loading...</span>
+        </div>
+        <div class="metric-item">
+          <span class="label">Network:</span>
+          <span class="value" id="network-usage">Loading...</span>
+        </div>
+        <div class="metric-item">
+          <span class="label">Response Time:</span>
+          <span class="value" id="response-time">Loading...</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Activity Feed Card -->
+    <div class="dashboard-card activity-card">
+      <div class="card-header">
+        <h3>Recent Activity</h3>
+      </div>
+      <div class="card-content">
+        <div class="activity-list" id="activity-feed">
+          <div class="activity-item">
+            <span class="activity-time">--:--</span>
+            <span class="activity-text">Loading activities...</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick Actions Card -->
+    <div class="dashboard-card actions-card">
+      <div class="card-header">
+        <h3>Quick Actions</h3>
+      </div>
+      <div class="card-content">
+        <button class="action-btn" id="refresh-btn" data-websocket-dashboard-target="refreshBtn">Refresh Data</button>
+        <button class="action-btn" id="toggle-websocket-btn">Toggle WebSocket</button>
+        <button class="action-btn" id="trigger-jobs-btn">Trigger Jobs</button>
+        <button class="action-btn" id="test-broadcast-btn" onclick="testWebSocketBroadcast()">Test Broadcast</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="dashboard-footer-info">
+    <p>Dashboard updates via WebSocket (Action Cable) - background jobs push updates</p>
+    <p>Check browser console (F12) to see WebSocket messages</p>
+    <p>Last data refresh: Loading...</p>
+  </div>
+</div>
+
+<script>
+function testWebSocketBroadcast() {
+  console.log("🧪 Testing WebSocket broadcast...")
+  fetch("/dashboard/test-action-cable")
+    .then(response => response.json())
+    .then(data => {
+      console.log("✅ Test broadcast sent:", data)
+    })
+    .catch(error => {
+      console.error("❌ Test broadcast failed:", error)
+    })
+}
+</script> 

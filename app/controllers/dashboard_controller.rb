@@ -1,5 +1,8 @@
 class DashboardController < ApplicationController
+  include ActionController::Live
   layout 'dashboard'
+  
+  helper_method :controller_action_to_controller_name
   
   def index
     load_dashboard_data
@@ -17,6 +20,35 @@ class DashboardController < ApplicationController
       format.turbo_stream { render :index }
       format.json { render json: dashboard_data_json }
     end
+  end
+
+  def stream
+    # SSE endpoint for real-time updates
+    response.headers['Content-Type'] = 'text/event-stream'
+    response.headers['Cache-Control'] = 'no-cache'
+    response.headers['Connection'] = 'keep-alive'
+    response.headers['X-Accel-Buffering'] = 'no'
+    
+    # Send initial data
+    load_dashboard_data
+    data = dashboard_data_json
+    response.stream.write("data: #{data.to_json}\n\n")
+    
+    # Keep connection alive and send periodic updates
+    # Background jobs will trigger updates via a different mechanism
+    loop do
+      sleep 10 # Send updates every 30 seconds
+      load_dashboard_data
+      data = dashboard_data_json
+      response.stream.write("data: #{data.to_json}\n\n")
+    rescue => e
+      Rails.logger.error "SSE Error: #{e.message}"
+      break
+    end
+  rescue => e
+    Rails.logger.error "SSE Stream Error: #{e.message}"
+  ensure
+    response.stream.close if response.stream
   end
 
   def test_action_cable
@@ -37,6 +69,11 @@ class DashboardController < ApplicationController
 
   def sse_test
     # SSE test page - load initial data
+    load_dashboard_data
+  end
+
+  def websocket_test
+    # WebSocket test page - load initial data
     load_dashboard_data
   end
 
@@ -73,6 +110,17 @@ class DashboardController < ApplicationController
   end
 
   private
+
+  def controller_action_to_controller_name
+    case action_name
+    when 'sse_test'
+      'sse-dashboard'
+    when 'websocket_test'
+      'websocket-dashboard'
+    else
+      'dashboard'
+    end
+  end
 
   def load_dashboard_data
     # Fetch current system status

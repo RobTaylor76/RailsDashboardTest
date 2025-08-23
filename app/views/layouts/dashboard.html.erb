@@ -18,7 +18,7 @@
     <%= javascript_importmap_tags %>
   </head>
 
-  <body class="dashboard-body" data-controller="<%= controller.action_name == 'sse_test' ? 'sse-dashboard' : 'dashboard' %>">
+  <body class="dashboard-body" data-controller="<%= controller_action_to_controller_name %>">
     <nav class="dashboard-nav">
       <div class="nav-container">
         <div class="nav-brand">
@@ -27,6 +27,7 @@
         <div class="nav-menu">
           <a href="/" class="nav-link">Dashboard</a>
           <a href="/dashboard/sse-test" class="nav-link">SSE Test</a>
+          <a href="/dashboard/websocket-test" class="nav-link">WebSocket Test</a>
           <a href="/dashboard/metrics" class="nav-link">Metrics</a>
         </div>
       </div>
