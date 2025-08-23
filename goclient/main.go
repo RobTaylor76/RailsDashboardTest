@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -53,10 +54,28 @@ type SSEClient struct {
 
 // NewSSEClient creates a new SSE client
 func NewSSEClient(id int, url string, connectTimeout time.Duration) *SSEClient {
+	// Create custom transport with separate timeouts
+	transport := &http.Transport{
+		DialContext: (&net.Dialer{
+			Timeout:   connectTimeout, // Connection timeout
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+		MaxIdleConns:          100,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	}
+
+	// Create client with no timeout (for SSE streaming)
+	client := &http.Client{
+		Transport: transport,
+		// No timeout - let the SSE stream run indefinitely
+	}
+
 	return &SSEClient{
 		ID:     id,
 		URL:    url,
-		Client: &http.Client{Timeout: connectTimeout},
+		Client: client,
 	}
 }
 
