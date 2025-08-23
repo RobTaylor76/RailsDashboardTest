@@ -4,5 +4,30 @@ echo "Starting Solid Queue worker..."
 echo "Environment: $RAILS_ENV"
 echo "Process ID: $$"
 
-# Start the worker using the built-in jobs command
-exec bin/jobs start --config-file=config/queue.yml
+# Ensure PID directory exists
+mkdir -p tmp/pids
+
+# Function to clean up PID file on exit
+cleanup() {
+    echo "Stopping worker..."
+    rm -f tmp/pids/worker.pid
+    exit 0
+}
+
+# Set up signal handlers
+trap cleanup SIGTERM SIGINT
+
+# Start the worker and capture its PID
+bin/jobs start --config-file=config/queue.yml &
+WORKER_PID=$!
+
+# Write the actual worker PID to file
+echo $WORKER_PID > tmp/pids/worker.pid
+
+echo "Worker started with PID: $WORKER_PID"
+
+# Wait for the worker process
+wait $WORKER_PID
+
+# Clean up PID file when worker exits
+cleanup

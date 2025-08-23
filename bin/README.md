@@ -18,6 +18,7 @@ Executable scripts for running the Rails application with separate web and backg
 **`bin/web`** - Rails web server
 - Runs on port 3000
 - Handles HTTP requests
+- Configured for 25 threads (supports 20+ SSE workers)
 - Usage: `./bin/web`
 
 **`bin/worker`** - Background job processor
@@ -87,6 +88,12 @@ web: ./bin/web
 worker: ./bin/worker
 ```
 
+### Web Server (SSE Support)
+- **Threads**: 25 (configurable via `RAILS_MAX_THREADS`)
+- **SSE Workers**: Supports 20+ concurrent SSE connections
+- **Database Pool**: Matches thread count for optimal performance
+- **Config**: `config/puma.rb` and `config/database.yml`
+
 ### Job Processing
 - **Adapter**: Solid Queue
 - **Config**: `config/queue.yml`
@@ -94,6 +101,24 @@ worker: ./bin/worker
 - **Jobs**: `app/jobs/`
 
 ## 📊 Monitoring
+
+### Process Management
+```bash
+# Check if processes are running
+ps aux | grep -E "(rails|solid-queue)" | grep -v grep
+
+# Check PID files
+cat tmp/pids/server.pid    # Web server PID
+cat tmp/pids/worker.pid    # Worker PID
+
+# Stop processes using PID files
+kill $(cat tmp/pids/server.pid) 2>/dev/null || echo "Web server not running"
+kill $(cat tmp/pids/worker.pid) 2>/dev/null || echo "Worker not running"
+
+# Stop all processes
+pkill -f "solid-queue"
+pkill -f "rails server"
+```
 
 ### Check Job Status
 ```bash
@@ -106,15 +131,7 @@ bin/rails console
 tail -f log/development.log
 ```
 
-### Check Processes
-```bash
-# Running processes
-ps aux | grep -E "(rails|solid-queue)" | grep -v grep
 
-# Stop processes
-pkill -f "solid-queue"
-pkill -f "rails server"
-```
 
 ## 🚨 Troubleshooting
 
@@ -132,11 +149,13 @@ pkill -f "rails server"
 ### Development
 - `RAILS_ENV=development`
 - `PORT=3000`
+- `RAILS_MAX_THREADS=25` (for SSE support)
 
 ### Production  
 - `RAILS_ENV=production`
 - `DATABASE_URL`
 - `REDIS_URL` (if using Redis)
+- `RAILS_MAX_THREADS=25` (for SSE support)
 
 ## 📁 File Structure
 
@@ -151,6 +170,10 @@ bin/
 └── rake              # Rake tasks
 
 Procfile              # Process definitions
+
+tmp/pids/
+├── server.pid        # Web server process ID
+└── worker.pid        # Worker process ID
 ```
 
 ## 📚 Dependencies

@@ -3,6 +3,13 @@
 echo "Starting Rails web server..."
 echo "Environment: $RAILS_ENV"
 echo "Process ID: $$"
+echo "Threads: ${RAILS_MAX_THREADS:-25}"
+
+# Set default threads for SSE support if not already set
+export RAILS_MAX_THREADS=${RAILS_MAX_THREADS:-25}
+
+# Ensure PID directory exists
+mkdir -p tmp/pids
 
 # Start the Rails server
 exec bin/rails server -p 3000
