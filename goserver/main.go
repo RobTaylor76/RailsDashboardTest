@@ -200,7 +200,7 @@ func (s *SSEServer) streamHandler(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Redis pub/sub started for connection: %s", conn.ID)
 	}
 
-	// Setup heartbeat timer
+	// Setup heartbeat timer with reset capability
 	heartbeatTicker := time.NewTicker(30 * time.Second)
 	defer heartbeatTicker.Stop()
 
@@ -245,6 +245,9 @@ func (s *SSEServer) streamHandler(w http.ResponseWriter, r *http.Request) {
 			}
 			flusher.Flush()
 			conn.LastSeen = time.Now()
+
+			// Reset heartbeat timer since we just sent data
+			heartbeatTicker.Reset(30 * time.Second)
 
 			log.Printf("Redis message sent to connection %s: %s", conn.ID, msg.Payload)
 		}
