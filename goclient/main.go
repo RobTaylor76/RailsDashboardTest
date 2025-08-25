@@ -43,13 +43,14 @@ type DashboardData struct {
 
 // SSEClient represents a single SSE connection
 type SSEClient struct {
-	ID        int
-	URL       string
-	Client    *http.Client
-	Messages  int
-	Errors    int
-	Connected bool
-	mu        sync.Mutex
+	ID         int
+	URL        string
+	Client     *http.Client
+	Messages   int
+	Heartbeats int
+	Errors     int
+	Connected  bool
+	mu         sync.Mutex
 }
 
 // NewSSEClient creates a new SSE client
@@ -138,12 +139,29 @@ func (s *SSEClient) Connect(ctx context.Context, onConnect func()) error {
 			continue
 		}
 
-		// Trim whitespace and check if it's a data line
+		// Trim whitespace and check the line type
 		trimmedLine := strings.TrimSpace(line)
+
+		// Handle data messages
 		if len(trimmedLine) > 5 && trimmedLine[:5] == "data:" {
 			// Remove "data:" prefix and trim any remaining whitespace
 			data := strings.TrimSpace(trimmedLine[5:])
 			s.handleMessage(data)
+		} else if len(trimmedLine) > 1 && trimmedLine[:1] == ":" {
+			// Handle heartbeat messages (lines starting with ":")
+			heartbeat := strings.TrimSpace(trimmedLine[1:])
+			s.mu.Lock()
+			s.Heartbeats++
+			s.mu.Unlock()
+
+			if heartbeat == "heartbeat" {
+				log.Printf("[Client %d] 💓 Heartbeat received (#%d)", s.ID, s.Heartbeats)
+			} else {
+				log.Printf("[Client %d] 💓 Heartbeat: %s (#%d)", s.ID, heartbeat, s.Heartbeats)
+			}
+		} else if len(trimmedLine) > 0 {
+			// Log any other non-empty lines for debugging
+			log.Printf("[Client %d] 📝 Other SSE line: %s", s.ID, trimmedLine)
 		}
 	}
 
@@ -187,10 +205,10 @@ func (s *SSEClient) handleMessage(data string) {
 }
 
 // GetStats returns current statistics for this client
-func (s *SSEClient) GetStats() (messages, errors int, connected bool) {
+func (s *SSEClient) GetStats() (messages, heartbeats, errors int, connected bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.Messages, s.Errors, s.Connected
+	return s.Messages, s.Heartbeats, s.Errors, s.Connected
 }
 
 // MarkDisconnected marks the client as disconnected
@@ -204,6 +222,7 @@ func (s *SSEClient) MarkDisconnected() {
 type Stats struct {
 	TotalClients          int
 	TotalMessages         int
+	TotalHeartbeats       int
 	TotalErrors           int
 	SuccessfulConnections int
 	ActiveConnections     int
@@ -213,10 +232,11 @@ type Stats struct {
 }
 
 // UpdateStats updates the global statistics
-func (s *Stats) UpdateStats(messages, errors int) {
+func (s *Stats) UpdateStats(messages, heartbeats, errors int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.TotalMessages += messages
+	s.TotalHeartbeats += heartbeats
 	s.TotalErrors += errors
 }
 
@@ -246,10 +266,10 @@ func (s *Stats) DecrementActiveConnection() {
 }
 
 // GetStats returns a copy of current statistics
-func (s *Stats) GetStats() (clients, messages, errors, successful, active, closed, failed int) {
+func (s *Stats) GetStats() (clients, messages, heartbeats, errors, successful, active, closed, failed int) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.TotalClients, s.TotalMessages, s.TotalErrors, s.SuccessfulConnections, s.ActiveConnections, s.ClosedConnections, s.FailedConnections
+	return s.TotalClients, s.TotalMessages, s.TotalHeartbeats, s.TotalErrors, s.SuccessfulConnections, s.ActiveConnections, s.ClosedConnections, s.FailedConnections
 }
 
 func main() {
@@ -295,9 +315,9 @@ func main() {
 				case <-ctx.Done():
 					return
 				case <-ticker.C:
-					clients, messages, errors, successful, active, closed, failed := stats.GetStats()
-					log.Printf("📊 Stats: %d clients, %d messages, %d errors, %d successful connections, %d active, %d closed, %d failed",
-						clients, messages, errors, successful, active, closed, failed)
+					clients, messages, heartbeats, errors, successful, active, closed, failed := stats.GetStats()
+					log.Printf("📊 Stats: %d clients, %d messages, %d heartbeats, %d errors, %d successful connections, %d active, %d closed, %d failed",
+						clients, messages, heartbeats, errors, successful, active, closed, failed)
 				}
 			}
 		}()
@@ -371,14 +391,16 @@ func main() {
 	wg.Wait()
 
 	// Final statistics
-	clients, messages, errors, successful, active, closed, failed := stats.GetStats()
+	clients, messages, heartbeats, errors, successful, active, closed, failed := stats.GetStats()
 	log.Printf("\n📊 Final Statistics:")
 	log.Printf("   Total Clients: %d", clients)
 	log.Printf("   Total Messages: %d", messages)
+	log.Printf("   Total Heartbeats: %d", heartbeats)
 	log.Printf("   Total Errors: %d", errors)
 	log.Printf("   Successful Connections: %d", successful)
 	log.Printf("   Active Connections: %d", active)
 	log.Printf("   Closed Connections: %d", closed)
 	log.Printf("   Failed Connections: %d", failed)
 	log.Printf("   Messages per Client: %.2f", float64(messages)/float64(clients))
+	log.Printf("   Heartbeats per Client: %.2f", float64(heartbeats)/float64(clients))
 }

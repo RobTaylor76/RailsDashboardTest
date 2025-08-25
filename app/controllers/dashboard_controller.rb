@@ -42,21 +42,57 @@ class DashboardController < ApplicationController
       redis = Redis.new(url: ENV.fetch('REDIS_URL', 'redis://localhost:6379'))
       pubsub = redis.dup
       
+      Rails.logger.info "SSE stream: Created Redis connections for client"
+      
       begin
-        # Subscribe to dashboard_updates channel
-        pubsub.subscribe('dashboard_updates') do |on|
-          on.message do |channel, message|
-            begin
-              data = JSON.parse(message)
-              response.stream.write("data: #{data.to_json}\n\n")
-            rescue => e
-              Rails.logger.error "Error processing Redis message: #{e.message}"
+        # Subscribe to dashboard_updates channel with timeout handling
+        Thread.new do
+          begin
+            pubsub.subscribe('dashboard_updates') do |on|
+              on.message do |channel, message|
+                begin
+                  data = JSON.parse(message)
+                  response.stream.write("data: #{data.to_json}\n\n")
+                rescue => e
+                  # Check if this is a client disconnect error
+                  if e.message.include?('client disconnected') || 
+                     e.message.include?('Broken pipe') ||
+                     e.message.include?('Connection reset') ||
+                     e.message.include?('stream closed')
+                    Rails.logger.info "SSE client disconnected, breaking pub/sub subscription"
+                    raise e # Re-raise to break out of the subscription
+                  else
+                    Rails.logger.error "Error processing Redis message: #{e.message}"
+                  end
+                end
+              end
+            end
+          rescue => e
+            # Handle client disconnect gracefully
+            if e.message.include?('client disconnected') || 
+               e.message.include?('Broken pipe') ||
+               e.message.include?('Connection reset') ||
+               e.message.include?('stream closed')
+              Rails.logger.info "SSE stream ended: client disconnected"
+            else
+              Rails.logger.error "Redis pub/sub error: #{e.message}"
             end
           end
         end
-      rescue => e
-        Rails.logger.error "Redis pub/sub error: #{e.message}"
+        
+        # Keep the main thread alive and monitor for client disconnect
+        loop do
+          sleep 30
+          # Check if the response stream is still valid
+          begin
+            response.stream.write(": heartbeat\n\n")
+          rescue => e
+            Rails.logger.info "SSE client disconnected, stopping stream"
+            break
+          end
+        end
       ensure
+        Rails.logger.info "SSE stream: Closing Redis connections"
         pubsub.close
         redis.close
       end
@@ -124,7 +160,19 @@ class DashboardController < ApplicationController
     render json: { 
       message: "Test pub/sub job triggered successfully",
       timestamp: Time.current.strftime("%H:%M:%S"),
-      sse_connections: SseManager.instance.stats[:total_connections]
+      redis_status: RedisPubsubService.instance.connection_status
+    }
+  end
+
+  def cleanup_redis_connections
+    # Force cleanup of Redis connections (for debugging)
+    redis_service = RedisPubsubService.instance
+    redis_service.force_cleanup
+    
+    render json: { 
+      message: "Redis connections cleanup triggered",
+      timestamp: Time.current.strftime("%H:%M:%S"),
+      redis_status: redis_service.connection_status
     }
   end
 
@@ -137,19 +185,22 @@ class DashboardController < ApplicationController
   def debug
     # Debug endpoint to check if everything is working
     begin
-      sse_manager = SseManager.instance
-      sse_stats = sse_manager.stats
-    rescue => e
-      sse_stats = { total_connections: 0, connections: [] }
-      Rails.logger.warn "Could not get SSE stats: #{e.message}"
-    end
-    
-    begin
       pubsub_service = PubsubService.instance
       pubsub_backend = pubsub_service.instance_variable_get(:@backend)
     rescue => e
       pubsub_backend = :unknown
       Rails.logger.warn "Could not get pub/sub backend: #{e.message}"
+    end
+    
+    begin
+      redis_status = if pubsub_backend == :redis
+        RedisPubsubService.instance.connection_status
+      else
+        { redis_connected: false, pubsub_connected: false, connection_count: 0 }
+      end
+    rescue => e
+      redis_status = { redis_connected: false, pubsub_connected: false, connection_count: 0, error: e.message }
+      Rails.logger.warn "Could not get Redis status: #{e.message}"
     end
     
     @debug_info = {
@@ -158,10 +209,10 @@ class DashboardController < ApplicationController
       metrics_count: Metric.count,
       activities_count: Activity.count,
       jobs_running: true,
-      services_loaded: defined?(SseManager) ? "Yes" : "No",
-      sse_connections: sse_stats,
+      services_loaded: "Redis Pub/Sub Only",
       pubsub_backend: pubsub_backend,
-      pubsub_events_count: PubsubEvent.count
+      pubsub_events_count: PubsubEvent.count,
+      redis_connections: redis_status
     }
   end
 

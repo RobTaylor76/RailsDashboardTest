@@ -21,8 +21,8 @@ fi
 echo ""
 echo "📋 Available test scenarios:"
 echo "1. Single client test"
-echo "2. Multiple clients test (5 clients)"
-echo "3. Load test (20 clients with stats)"
+echo "2. Multiple clients test"
+echo "3. Load test with stats"
 echo "4. Custom URL test"
 echo "5. Exit"
 echo ""
@@ -35,12 +35,20 @@ case $choice in
         ./sse-client
         ;;
     2)
-        echo "🧪 Running multiple clients test (5 clients)..."
-        ./sse-client -clients 5
+        read -p "Enter number of clients (default: 5): " num_clients
+        if [ -z "$num_clients" ]; then
+            num_clients=5
+        fi
+        echo "🧪 Running multiple clients test ($num_clients clients)..."
+        ./sse-client -clients "$num_clients"
         ;;
     3)
-        echo "🧪 Running load test (20 clients with stats)..."
-        ./sse-client -clients 20 -stats
+        read -p "Enter number of clients (default: 20): " num_clients
+        if [ -z "$num_clients" ]; then
+            num_clients=20
+        fi
+        echo "🧪 Running load test ($num_clients clients with stats)..."
+        ./sse-client -clients "$num_clients" -stats
         ;;
     4)
         read -p "Enter custom URL (default: http://localhost:3000/dashboard/stream): " custom_url
@@ -51,8 +59,13 @@ case $choice in
         if [ -z "$num_clients" ]; then
             num_clients=5
         fi
+        read -p "Enable stats? (y/n, default: n): " enable_stats
+        stats_flag=""
+        if [[ "$enable_stats" =~ ^[Yy]$ ]]; then
+            stats_flag="-stats"
+        fi
         echo "🧪 Running custom test with URL: $custom_url and $num_clients clients..."
-        ./sse-client -url "$custom_url" -clients "$num_clients" -stats
+        ./sse-client -url "$custom_url" -clients "$num_clients" $stats_flag
         ;;
     5)
         echo "👋 Goodbye!"

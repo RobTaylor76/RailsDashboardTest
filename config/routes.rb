@@ -20,6 +20,7 @@ Rails.application.routes.draw do
   get "dashboard/websocket-test", to: "dashboard#websocket_test"
   get "dashboard/trigger-jobs", to: "dashboard#trigger_jobs"
   get "dashboard/trigger-test-pubsub", to: "dashboard#trigger_test_pubsub"
+  get "dashboard/cleanup-redis-connections", to: "dashboard#cleanup_redis_connections"
   get "dashboard/test-auto-refresh", to: "dashboard#test_auto_refresh"
   get "dashboard/debug", to: "dashboard#debug"
   get "dashboard/metrics", to: "dashboard#metrics"

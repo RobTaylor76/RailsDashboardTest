@@ -55,14 +55,26 @@ class PubsubService
   def redis_available?
     return false unless defined?(Redis)
     
-    begin
-      redis = Redis.new(url: ENV.fetch('REDIS_URL', 'redis://localhost:6379'))
-      redis.ping
-      redis.close
-      true
-    rescue => e
-      Rails.logger.warn "Redis not available: #{e.message}"
-      false
+    # Use the existing Redis connection from the initializer if available
+    if Rails.application.config.respond_to?(:redis) && Rails.application.config.redis
+      begin
+        Rails.application.config.redis.ping
+        true
+      rescue => e
+        Rails.logger.warn "Stored Redis connection failed: #{e.message}"
+        false
+      end
+    else
+      # Fallback to creating a new connection for testing
+      begin
+        redis = Redis.new(url: ENV.fetch('REDIS_URL', 'redis://localhost:6379'))
+        redis.ping
+        redis.close
+        true
+      rescue => e
+        Rails.logger.warn "Redis not available: #{e.message}"
+        false
+      end
     end
   end
 end
