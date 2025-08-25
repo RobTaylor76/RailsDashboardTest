@@ -50,6 +50,7 @@ type SSEClient struct {
 	Heartbeats int
 	Errors     int
 	Connected  bool
+	Debug      bool
 	mu         sync.Mutex
 }
 
@@ -77,6 +78,7 @@ func NewSSEClient(id int, url string, connectTimeout time.Duration) *SSEClient {
 		ID:     id,
 		URL:    url,
 		Client: client,
+		Debug:  false,
 	}
 }
 
@@ -141,6 +143,11 @@ func (s *SSEClient) Connect(ctx context.Context, onConnect func()) error {
 
 		// Trim whitespace and check the line type
 		trimmedLine := strings.TrimSpace(line)
+
+		// Debug: Log all non-empty lines to see what we're receiving
+		if len(trimmedLine) > 0 && s.Debug {
+			log.Printf("[Client %d] 🔍 Raw SSE line: '%s'", s.ID, trimmedLine)
+		}
 
 		// Handle data messages
 		if len(trimmedLine) > 5 && trimmedLine[:5] == "data:" {
@@ -278,6 +285,7 @@ func main() {
 		numClients = flag.Int("clients", 1, "Number of concurrent SSE clients")
 		showStats  = flag.Bool("stats", false, "Show periodic statistics")
 		timeout    = flag.Duration("timeout", 60*time.Second, "Connection timeout (0 = no timeout)")
+		debug      = flag.Bool("debug", false, "Enable debug logging")
 	)
 	flag.Parse()
 
@@ -330,6 +338,7 @@ func main() {
 		wg.Add(1)
 		go func(clientID int) {
 			client := NewSSEClient(clientID, *url, *timeout)
+			client.Debug = *debug
 
 			defer func() {
 				// Mark client as disconnected when goroutine ends

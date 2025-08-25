@@ -32,7 +32,7 @@ read -p "Select a test scenario (1-5): " choice
 case $choice in
     1)
         echo "🧪 Running single client test..."
-        ./sse-client
+        ./sse-client -debug
         ;;
     2)
         read -p "Enter number of clients (default: 5): " num_clients
@@ -40,7 +40,7 @@ case $choice in
             num_clients=5
         fi
         echo "🧪 Running multiple clients test ($num_clients clients)..."
-        ./sse-client -clients "$num_clients"
+        ./sse-client -clients "$num_clients" 
         ;;
     3)
         read -p "Enter number of clients (default: 20): " num_clients
