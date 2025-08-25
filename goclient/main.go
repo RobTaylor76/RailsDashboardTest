@@ -359,7 +359,24 @@ func (w *WebSocketClient) processMessage(message []byte) {
 		return
 	}
 
-	// Check message type
+	// Check if this is an ActionCable channel message (has identifier and message fields)
+	if identifier, hasIdentifier := jsonData["identifier"].(string); hasIdentifier {
+		if msgData, hasMessage := jsonData["message"].(map[string]interface{}); hasMessage {
+			// This is a channel message with dashboard data
+			log.Printf("[WebSocket Client %d] 📊 Dashboard message received from %s", w.ID, identifier)
+			w.Messages++
+
+			// Try to extract timestamp from the message
+			if timestamp, ok := msgData["timestamp"].(string); ok {
+				log.Printf("[WebSocket Client %d] ✅ Received dashboard data: %s", w.ID, timestamp)
+			} else {
+				log.Printf("[WebSocket Client %d] ✅ Received dashboard message", w.ID)
+			}
+			return
+		}
+	}
+
+	// Check message type for control messages
 	msgType, ok := jsonData["type"].(string)
 	if !ok {
 		log.Printf("[WebSocket Client %d] ⚠️ No message type found", w.ID)
