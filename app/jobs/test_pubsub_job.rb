@@ -34,6 +34,6 @@ class TestPubsubJob < ApplicationJob
     # Broadcast to WebSocket clients
     ActionCable.server.broadcast("dashboard_updates", test_data)
     
-    Rails.logger.info "TestPubsubJob completed - broadcasted to #{sse_manager.stats[:total_connections]} SSE connections"
+    Rails.logger.info "TestPubsubJob completed - broadcasted to pub/sub and WebSocket clients"
   end
 end

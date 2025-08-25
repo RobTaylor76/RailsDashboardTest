@@ -42,13 +42,25 @@ class RedisPubsubService
 
   # Publish data to a channel (called by background jobs)
   def publish(channel, data)
-    redis = redis_connection
-    redis.publish(channel, data.to_json)
-    Rails.logger.info "Published to Redis channel '#{channel}': #{data[:type] || 'data'}"
-  rescue => e
-    Rails.logger.error "Redis publish error: #{e.message}"
-    # Mark connection as potentially broken
-    @mutex.synchronize { @redis = nil if @redis }
+    # For publishing, create a temporary connection that gets closed immediately
+    # This prevents connection leaks from background jobs
+    redis = nil
+    begin
+      redis = Redis.new(url: ENV.fetch('REDIS_URL', 'redis://localhost:6379'))
+      redis.publish(channel, data.to_json)
+      Rails.logger.info "Published to Redis channel '#{channel}': #{data[:type] || 'data'}"
+    rescue => e
+      Rails.logger.error "Redis publish error: #{e.message}"
+    ensure
+      # Always close the temporary connection
+      if redis
+        begin
+          redis.close
+        rescue => e
+          Rails.logger.warn "Failed to close temporary Redis connection: #{e.message}"
+        end
+      end
+    end
   end
 
   # Subscribe to a channel (called by web server)
