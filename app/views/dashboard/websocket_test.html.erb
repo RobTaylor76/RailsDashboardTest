@@ -1,6 +1,8 @@
 <% content_for :title, "WebSocket Dashboard Test" %>
 
-<div id="dashboard-content" data-websocket-dashboard-target="content">
+<div id="dashboard-content" 
+     data-controller="websocket-dashboard"
+     data-websocket-dashboard-target="content">
   <div class="dashboard-header">
     <h2>WebSocket Dashboard Test</h2>
     <p class="dashboard-subtitle">Background jobs push updates via Action Cable (WebSockets)</p>
