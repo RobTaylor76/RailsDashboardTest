@@ -15,6 +15,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/gorilla/websocket"
 )
 
 // DashboardData represents the structure of the SSE messages
@@ -54,6 +56,19 @@ type SSEClient struct {
 	mu         sync.Mutex
 }
 
+// WebSocketClient represents a single WebSocket connection
+type WebSocketClient struct {
+	ID         int
+	URL        string
+	Conn       *websocket.Conn
+	Messages   int
+	Heartbeats int
+	Errors     int
+	Connected  bool
+	Debug      bool
+	mu         sync.Mutex
+}
+
 // NewSSEClient creates a new SSE client
 func NewSSEClient(id int, url string, connectTimeout time.Duration) *SSEClient {
 	// Create custom transport with separate timeouts
@@ -79,6 +94,15 @@ func NewSSEClient(id int, url string, connectTimeout time.Duration) *SSEClient {
 		URL:    url,
 		Client: client,
 		Debug:  false,
+	}
+}
+
+// NewWebSocketClient creates a new WebSocket client
+func NewWebSocketClient(id int, url string) *WebSocketClient {
+	return &WebSocketClient{
+		ID:    id,
+		URL:   url,
+		Debug: false,
 	}
 }
 
@@ -225,6 +249,172 @@ func (s *SSEClient) MarkDisconnected() {
 	s.Connected = false
 }
 
+// Connect establishes a WebSocket connection and listens for messages
+func (w *WebSocketClient) Connect(ctx context.Context, onConnect func()) error {
+	log.Printf("[WebSocket Client %d] 🔗 Attempting to connect to %s", w.ID, w.URL)
+
+	// Create WebSocket dialer
+	dialer := websocket.Dialer{
+		HandshakeTimeout: 10 * time.Second,
+	}
+
+	// Connect to WebSocket
+	conn, _, err := dialer.DialContext(ctx, w.URL, nil)
+	if err != nil {
+		log.Printf("[WebSocket Client %d] ❌ Failed to connect: %v", w.ID, err)
+		return fmt.Errorf("failed to connect: %w", err)
+	}
+
+	w.Conn = conn
+	w.Connected = true
+	log.Printf("[WebSocket Client %d] ✅ Connected successfully", w.ID)
+
+	// Subscribe to the dashboard_updates channel
+	if err := w.subscribeToChannel("dashboard_updates"); err != nil {
+		log.Printf("[WebSocket Client %d] ⚠️ Failed to subscribe to channel: %v", w.ID, err)
+		// Don't return error, continue anyway
+	}
+
+	// Call onConnect callback
+	if onConnect != nil {
+		onConnect()
+	}
+
+	return nil
+}
+
+// subscribeToChannel subscribes to an ActionCable channel
+func (w *WebSocketClient) subscribeToChannel(channelName string) error {
+	// ActionCable subscription message format
+	// Note: For ActionCable, we need to use the channel class name, not the identifier
+	// The channel class name is "DashboardUpdatesChannel" for the "dashboard_updates" stream
+	subscribeMsg := map[string]interface{}{
+		"command":    "subscribe",
+		"identifier": fmt.Sprintf(`{"channel":"DashboardUpdatesChannel"}`),
+	}
+
+	// Convert to JSON
+	jsonData, err := json.Marshal(subscribeMsg)
+	if err != nil {
+		return fmt.Errorf("failed to marshal subscription message: %w", err)
+	}
+
+	// Send subscription message
+	if err := w.Conn.WriteMessage(websocket.TextMessage, jsonData); err != nil {
+		return fmt.Errorf("failed to send subscription message: %w", err)
+	}
+
+	log.Printf("[WebSocket Client %d] 📡 Subscribed to channel: %s (DashboardUpdatesChannel)", w.ID, channelName)
+	return nil
+}
+
+// handleMessages handles incoming WebSocket messages
+func (w *WebSocketClient) handleMessages(ctx context.Context) error {
+	defer func() {
+		w.Connected = false
+		if w.Conn != nil {
+			w.Conn.Close()
+		}
+		log.Printf("[WebSocket Client %d] 🔌 Connection closed", w.ID)
+	}()
+
+	for {
+		select {
+		case <-ctx.Done():
+			log.Printf("[WebSocket Client %d] 🛑 Context cancelled", w.ID)
+			return ctx.Err()
+		default:
+			// Set read deadline
+			w.Conn.SetReadDeadline(time.Now().Add(30 * time.Second))
+
+			// Read message
+			_, message, err := w.Conn.ReadMessage()
+			if err != nil {
+				if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+					log.Printf("[WebSocket Client %d] ❌ WebSocket error: %v", w.ID, err)
+					w.incrementErrors()
+				}
+				return err
+			}
+
+			// Process message
+			w.processMessage(message)
+		}
+	}
+}
+
+// processMessage processes a WebSocket message
+func (w *WebSocketClient) processMessage(message []byte) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	if w.Debug {
+		log.Printf("[WebSocket Client %d] 📨 Raw message: %s", w.ID, string(message))
+	}
+
+	// Try to parse as JSON first
+	var jsonData map[string]interface{}
+	if err := json.Unmarshal(message, &jsonData); err != nil {
+		log.Printf("[WebSocket Client %d] ⚠️ Failed to parse JSON: %v", w.ID, err)
+		return
+	}
+
+	// Check message type
+	msgType, ok := jsonData["type"].(string)
+	if !ok {
+		log.Printf("[WebSocket Client %d] ⚠️ No message type found", w.ID)
+		return
+	}
+
+	switch msgType {
+	case "welcome":
+		log.Printf("[WebSocket Client %d] 🎉 Welcome message received", w.ID)
+		w.Messages++
+	case "ping":
+		log.Printf("[WebSocket Client %d] 💓 Ping received", w.ID)
+		w.Heartbeats++
+	case "confirm_subscription":
+		log.Printf("[WebSocket Client %d] ✅ Channel subscription confirmed", w.ID)
+		w.Messages++
+	case "message":
+		// This is where actual dashboard data would come
+		log.Printf("[WebSocket Client %d] 📊 Dashboard message received", w.ID)
+		w.Messages++
+
+		// Try to parse as DashboardData if it's a dashboard message
+		var dashboardData DashboardData
+		if err := json.Unmarshal(message, &dashboardData); err == nil && dashboardData.Timestamp != "" {
+			log.Printf("[WebSocket Client %d] ✅ Received dashboard data: %s", w.ID, dashboardData.Timestamp)
+		} else {
+			log.Printf("[WebSocket Client %d] ✅ Received message: %s", w.ID, string(message))
+		}
+	default:
+		// Check if this is a channel message (ActionCable format)
+		if identifier, ok := jsonData["identifier"].(string); ok {
+			// This is likely a channel message
+			log.Printf("[WebSocket Client %d] 📡 Channel message from %s: %s", w.ID, identifier, string(message))
+			w.Messages++
+		} else {
+			log.Printf("[WebSocket Client %d] ✅ Received %s message: %s", w.ID, msgType, string(message))
+			w.Messages++
+		}
+	}
+}
+
+// incrementErrors increments the error count
+func (w *WebSocketClient) incrementErrors() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.Errors++
+}
+
+// GetStats returns the client statistics
+func (w *WebSocketClient) GetStats() (int, int, int, bool) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.Messages, w.Heartbeats, w.Errors, w.Connected
+}
+
 // Stats represents overall statistics
 type Stats struct {
 	TotalClients          int
@@ -281,11 +471,12 @@ func (s *Stats) GetStats() (clients, messages, heartbeats, errors, successful, a
 
 func main() {
 	var (
-		url        = flag.String("url", "http://localhost:3000/dashboard/stream", "SSE endpoint URL")
-		numClients = flag.Int("clients", 1, "Number of concurrent SSE clients")
+		url        = flag.String("url", "http://localhost:3000/dashboard/stream", "SSE/WebSocket endpoint URL")
+		numClients = flag.Int("clients", 1, "Number of concurrent clients")
 		showStats  = flag.Bool("stats", false, "Show periodic statistics")
 		timeout    = flag.Duration("timeout", 60*time.Second, "Connection timeout (0 = no timeout)")
 		debug      = flag.Bool("debug", false, "Enable debug logging")
+		protocol   = flag.String("protocol", "sse", "Protocol to use: 'sse' or 'websocket'")
 	)
 	flag.Parse()
 
@@ -293,7 +484,12 @@ func main() {
 		log.Fatal("Number of clients must be at least 1")
 	}
 
-	log.Printf("🚀 Starting SSE load test with %d clients", *numClients)
+	// Validate protocol
+	if *protocol != "sse" && *protocol != "websocket" {
+		log.Fatal("Protocol must be 'sse' or 'websocket'")
+	}
+
+	log.Printf("🚀 Starting %s load test with %d clients", strings.ToUpper(*protocol), *numClients)
 	log.Printf("📡 Target URL: %s", *url)
 	log.Printf("⏱️  Connection timeout: %v", *timeout)
 
@@ -331,58 +527,133 @@ func main() {
 		}()
 	}
 
-	// Start all SSE clients
+	// Start all clients
 	var wg sync.WaitGroup
 	for i := 1; i <= *numClients; i++ {
-		log.Printf("🚀 Starting client %d of %d", i, *numClients)
+		log.Printf("🚀 Starting %s client %d of %d", strings.ToUpper(*protocol), i, *numClients)
 		wg.Add(1)
 		go func(clientID int) {
-			client := NewSSEClient(clientID, *url, *timeout)
-			client.Debug = *debug
+			if *protocol == "websocket" {
+				// WebSocket client
+				client := NewWebSocketClient(clientID, *url)
+				client.Debug = *debug
 
-			defer func() {
-				// Mark client as disconnected when goroutine ends
-				client.MarkDisconnected()
-				stats.DecrementActiveConnection()
-				wg.Done()
-			}()
+				defer func() {
+					// Mark client as disconnected when goroutine ends
+					client.Connected = false
+					stats.DecrementActiveConnection()
+					wg.Done()
+				}()
 
-			// Retry loop for reconnection
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				default:
-				}
-
-				if err := client.Connect(ctx, func() {
-					stats.IncrementSuccessfulConnection()
-				}); err != nil {
-					// Check if this is a context cancellation (graceful shutdown)
-					if err == context.Canceled {
-						log.Printf("[Client %d] 🔄 Graceful shutdown", clientID)
-						return
-					}
-
-					// Check if context is done (graceful shutdown)
+				// Retry loop for reconnection
+				for {
 					select {
 					case <-ctx.Done():
-						log.Printf("[Client %d] 🔄 Graceful shutdown (context done)", clientID)
 						return
 					default:
-						// This is a real connection error
-						log.Printf("[Client %d] ❌ Connection error: %v", clientID, err)
-						stats.IncrementFailedConnection()
-						client.mu.Lock()
-						client.Errors++
-						client.mu.Unlock()
+					}
 
-						// Wait before retrying
+					if err := client.Connect(ctx, func() {
+						stats.IncrementSuccessfulConnection()
+					}); err != nil {
+						// Check if this is a context cancellation (graceful shutdown)
+						if err == context.Canceled {
+							log.Printf("[WebSocket Client %d] 🔄 Graceful shutdown", clientID)
+							return
+						}
+
+						// Check if context is done (graceful shutdown)
 						select {
 						case <-ctx.Done():
+							log.Printf("[WebSocket Client %d] 🔄 Graceful shutdown (context done)", clientID)
 							return
-						case <-time.After(5 * time.Second):
+						default:
+							// This is a real connection error
+							log.Printf("[WebSocket Client %d] ❌ Connection error: %v", clientID, err)
+							stats.IncrementFailedConnection()
+							client.mu.Lock()
+							client.Errors++
+							client.mu.Unlock()
+
+							// Wait before retrying
+							select {
+							case <-ctx.Done():
+								return
+							case <-time.After(5 * time.Second):
+								continue
+							}
+						}
+					}
+
+					// Handle messages in the same loop (no separate goroutine)
+					if err := client.handleMessages(ctx); err != nil {
+						// Check if this is a context cancellation (graceful shutdown)
+						if err == context.Canceled {
+							log.Printf("[WebSocket Client %d] 🔄 Graceful shutdown", clientID)
+							return
+						}
+
+						// Check if context is done (graceful shutdown)
+						select {
+						case <-ctx.Done():
+							log.Printf("[WebSocket Client %d] 🔄 Graceful shutdown (context done)", clientID)
+							return
+						default:
+							// This is a real connection error, continue to retry
+							log.Printf("[WebSocket Client %d] 🔄 Connection lost, retrying...", clientID)
 							continue
+						}
+					}
+				}
+			} else {
+				// SSE client
+				client := NewSSEClient(clientID, *url, *timeout)
+				client.Debug = *debug
+
+				defer func() {
+					// Mark client as disconnected when goroutine ends
+					client.MarkDisconnected()
+					stats.DecrementActiveConnection()
+					wg.Done()
+				}()
+
+				// Retry loop for reconnection
+				for {
+					select {
+					case <-ctx.Done():
+						return
+					default:
+					}
+
+					if err := client.Connect(ctx, func() {
+						stats.IncrementSuccessfulConnection()
+					}); err != nil {
+						// Check if this is a context cancellation (graceful shutdown)
+						if err == context.Canceled {
+							log.Printf("[Client %d] 🔄 Graceful shutdown", clientID)
+							return
+						}
+
+						// Check if context is done (graceful shutdown)
+						select {
+						case <-ctx.Done():
+							log.Printf("[Client %d] 🔄 Graceful shutdown (context done)", clientID)
+							return
+						default:
+							// This is a real connection error
+							log.Printf("[Client %d] ❌ Connection error: %v", clientID, err)
+							stats.IncrementFailedConnection()
+							client.mu.Lock()
+							client.Errors++
+							client.mu.Unlock()
+
+							// Wait before retrying
+							select {
+							case <-ctx.Done():
+								return
+							case <-time.After(5 * time.Second):
+								continue
+							}
 						}
 					}
 				}

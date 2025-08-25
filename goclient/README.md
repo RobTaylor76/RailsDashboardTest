@@ -1,130 +1,210 @@
-# SSE Load Testing Client
+# SSE/WebSocket Client
 
-A Go program for testing Server-Sent Events (SSE) endpoints with multiple concurrent connections.
+A Go-based load testing client for SSE (Server-Sent Events) and WebSocket connections. This client can test both the Rails SSE stream endpoint and the ActionCable WebSocket implementation.
 
 ## Features
 
-- Create multiple concurrent SSE connections to test server scaling
-- Automatic reconnection on connection failures
-- Real-time message parsing and display
-- Statistics tracking (messages received, errors, etc.)
-- Graceful shutdown with Ctrl+C
-- Configurable target URL and number of clients
+- **Dual Protocol Support**: Test both SSE and WebSocket connections
+- **Load Testing**: Support for multiple concurrent clients
+- **Real-time Statistics**: Monitor connection status, messages, and errors
+- **Debug Mode**: Verbose logging for troubleshooting
+- **Cross-Process Testing**: Test WebSocket connections from background jobs
+- **Graceful Shutdown**: Clean connection handling and statistics reporting
 
-## Usage
-
-### Basic Usage
-
-```bash
-# Run with default settings (1 client, localhost:3000)
-go run main.go
-
-# Run with multiple clients
-go run main.go -clients 10
-
-# Specify a different URL
-go run main.go -url http://localhost:3000/dashboard/stream -clients 5
-
-# Enable periodic statistics reporting
-go run main.go -clients 20 -stats
-```
-
-### Command Line Options
-
-- `-url`: SSE endpoint URL (default: `http://localhost:3000/dashboard/stream`)
-- `-clients`: Number of concurrent SSE clients (default: `1`)
-- `-stats`: Show periodic statistics every 10 seconds (default: `false`)
-
-### Examples
-
-```bash
-# Test with 5 clients
-go run main.go -clients 5
-
-# Test with 50 clients and show stats
-go run main.go -clients 50 -stats
-
-# Test against a remote server
-go run main.go -url https://your-server.com/dashboard/stream -clients 10
-
-# Build and run the binary
-go build -o sse-client main.go
-./sse-client -clients 25 -stats
-```
-
-## Output
-
-The program displays:
-- Connection status for each client
-- Parsed SSE messages with formatted dashboard data
-- Error messages for failed connections or parsing issues
-- Periodic statistics (if enabled)
-- Final summary statistics
-
-### Sample Output
-
-```
-🚀 Starting SSE load test with 5 clients
-📡 Target URL: http://localhost:3000/dashboard/stream
-[Client 1] ✅ Connected to SSE stream at http://localhost:3000/dashboard/stream
-[Client 2] ✅ Connected to SSE stream at http://localhost:3000/dashboard/stream
-[Client 3] ✅ Connected to SSE stream at http://localhost:3000/dashboard/stream
-[Client 4] ✅ Connected to SSE stream at http://localhost:3000/dashboard/stream
-[Client 5] ✅ Connected to SSE stream at http://localhost:3000/dashboard/stream
-
-[Client 1] 📡 Message #1 received at 14:30:25
-   Status: online (Uptime: 2h 15m 30s)
-   CPU: 45% | Memory: 67% | Disk: 52% | Network: 12 MB/s
-   Response Time: 125ms
-   Latest Activity: 14:30:20 - System check completed successfully (info)
-
-[Client 2] 📡 Message #1 received at 14:30:25
-   Status: online (Uptime: 2h 15m 30s)
-   CPU: 45% | Memory: 67% | Disk: 52% | Network: 12 MB/s
-   Response Time: 125ms
-   Latest Activity: 14:30:20 - System check completed successfully (info)
-
-📊 Stats: 5 clients, 10 messages, 0 errors
-```
-
-## Requirements
+## Prerequisites
 
 - Go 1.21 or later
-- Network access to the SSE endpoint
-- The target Rails server should be running with SSE enabled
+- Git (for version information)
 
-## Building
+## Quick Start
+
+### 1. Build the Client
 
 ```bash
-# Build for current platform
-go build -o sse-client main.go
+# Normal build
+./build.sh
 
-# Build for different platforms
-GOOS=linux GOARCH=amd64 go build -o sse-client-linux main.go
-GOOS=darwin GOARCH=amd64 go build -o sse-client-mac main.go
-GOOS=windows GOARCH=amd64 go build -o sse-client.exe main.go
+# Clean build (removes old binary)
+./build.sh --clean
+
+# Install dependencies and build
+./build.sh --deps
+
+# Show build options
+./build.sh --help
 ```
 
-## Testing Your Rails SSE Server
+### 2. Run Tests
 
-1. Start your Rails server:
-   ```bash
-   cd dashboard
-   rails server
-   ```
+```bash
+# Interactive test script
+./test.sh
 
-2. Run the SSE client:
-   ```bash
-   cd goclient
-   go run main.go -clients 10 -stats
-   ```
+# Direct command line usage
+./sse-client --help
+```
 
-3. Monitor the output to see how your server handles multiple concurrent SSE connections.
+## Usage Examples
 
-## Notes
+### SSE Testing
 
-- The program automatically handles reconnections if the connection is lost
-- Each client runs in its own goroutine for true concurrency
-- Messages are parsed as JSON and displayed in a readable format
-- Use Ctrl+C to gracefully shut down all connections
-- The program tracks statistics per client and globally
+```bash
+# Single SSE client with debug
+./sse-client -url "http://localhost:3000/dashboard/stream" -protocol sse -debug
+
+# Multiple SSE clients with statistics
+./sse-client -url "http://localhost:3000/dashboard/stream" -protocol sse -clients 10 -stats
+
+# Test Go server SSE endpoint
+./sse-client -url "http://localhost:3001/dashboard/stream" -protocol sse -clients 5
+```
+
+### WebSocket Testing
+
+```bash
+# Single WebSocket client with debug
+./sse-client -url "ws://localhost:3000/cable" -protocol websocket -debug
+
+# Multiple WebSocket clients
+./sse-client -url "ws://localhost:3000/cable" -protocol websocket -clients 10 -stats
+
+# Test with custom timeout
+./sse-client -url "ws://localhost:3000/cable" -protocol websocket -timeout 30s
+```
+
+### Interactive Testing
+
+```bash
+./test.sh
+```
+
+The interactive script will prompt for:
+- Port number (default: 3000)
+- Protocol selection (SSE or WebSocket)
+- Test scenario (single client, multiple clients, load test, custom)
+
+## Command Line Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `-url` | Target URL for connections | `http://localhost:3000/dashboard/stream` |
+| `-protocol` | Protocol to use: `sse` or `websocket` | `sse` |
+| `-clients` | Number of concurrent clients | `1` |
+| `-stats` | Show periodic statistics | `false` |
+| `-timeout` | Connection timeout | `60s` |
+| `-debug` | Enable debug logging | `false` |
+
+## Build Script Options
+
+| Option | Description |
+|--------|-------------|
+| `--clean` | Clean build artifacts before building |
+| `--deps` | Install/update dependencies before building |
+| `--build-only` | Only build, skip dependency management |
+| `--help`, `-h` | Show help message |
+
+## Architecture
+
+### SSE Client
+- Uses HTTP/1.1 streaming connections
+- Handles SSE format messages (`data:`, `event:`, `: heartbeat`)
+- Supports reconnection and error recovery
+- Monitors connection health with heartbeats
+
+### WebSocket Client
+- Uses WebSocket protocol for bidirectional communication
+- Connects to ActionCable endpoint (`/cable`)
+- Handles JSON message format
+- Supports ping/pong for connection health
+
+### Statistics Tracking
+- Total connections and messages
+- Heartbeat and error counts
+- Connection success/failure rates
+- Real-time performance metrics
+
+## Testing Scenarios
+
+### 1. Single Client Test
+- Basic connectivity verification
+- Message format validation
+- Debug output for troubleshooting
+
+### 2. Multiple Clients Test
+- Concurrent connection handling
+- Load distribution testing
+- Connection stability verification
+
+### 3. Load Test with Statistics
+- Performance benchmarking
+- Resource usage monitoring
+- Scalability testing
+- Periodic statistics reporting
+
+### 4. Custom URL Test
+- Testing different endpoints
+- Protocol comparison
+- Custom configuration testing
+
+## Integration with Rails Dashboard
+
+### SSE Endpoints
+- **Rails Server**: `http://localhost:3000/dashboard/stream`
+- **Go Server**: `http://localhost:3001/dashboard/stream`
+
+### WebSocket Endpoints
+- **ActionCable**: `ws://localhost:3000/cable`
+
+### Background Job Testing
+1. Start the client: `./sse-client -protocol websocket -debug`
+2. Trigger background job: `curl http://localhost:3000/dashboard/trigger-test-pubsub`
+3. Verify WebSocket receives broadcast message
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Connection Refused**
+   - Verify server is running on correct port
+   - Check firewall settings
+   - Ensure correct protocol (http vs ws)
+
+2. **WebSocket Handshake Failed**
+   - Verify ActionCable is properly configured
+   - Check CORS settings
+   - Ensure Redis adapter is configured
+
+3. **No Messages Received**
+   - Check server logs for errors
+   - Verify background jobs are running
+   - Test with debug mode enabled
+
+### Debug Mode
+Enable debug logging to see:
+- Raw message content
+- Connection attempts
+- Error details
+- Protocol-specific information
+
+```bash
+./sse-client -debug -protocol websocket
+```
+
+## Performance Considerations
+
+- **Memory Usage**: Each client maintains its own connection
+- **CPU Usage**: Minimal for idle connections, increases with message volume
+- **Network**: Bandwidth scales with number of clients and message frequency
+- **File Descriptors**: One per client connection
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Test with both SSE and WebSocket protocols
+5. Submit a pull request
+
+## License
+
+This project is part of the Rails Dashboard system.
