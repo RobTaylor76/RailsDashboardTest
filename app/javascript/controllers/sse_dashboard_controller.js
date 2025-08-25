@@ -10,10 +10,6 @@ export default class extends Controller {
   }
 
   connect() {
-    console.log("🚀 SSE Dashboard controller connected")
-    console.log("📊 Auto-refresh enabled:", this.autoRefreshValue)
-    console.log("🔗 SSE endpoint:", this.getSSEUrl())
-    
     this.setupRefreshButton()
     this.showConnectedIndicator()
     
@@ -23,12 +19,10 @@ export default class extends Controller {
   }
 
   disconnect() {
-    console.log("🔌 SSE Dashboard controller disconnected")
     this.stopSSEConnection()
   }
 
   getSSEUrl() {
-    // Use Go server by default (port 3001), fallback to Rails server (port 3000)
     const port = this.ssePortValue
     const host = this.sseHostValue
     const endpoint = this.sseEndpointValue
@@ -43,26 +37,20 @@ export default class extends Controller {
   }
 
   startSSEConnection() {
-    console.log("🔄 Starting SSE connection")
-    
     try {
       const sseUrl = this.getSSEUrl()
-      console.log("🔗 Connecting to SSE endpoint:", sseUrl)
       
       this.eventSource = new EventSource(sseUrl)
       
       this.eventSource.onopen = (event) => {
-        console.log("✅ SSE connection opened")
         this.showConnectedIndicator()
       }
       
       this.eventSource.onmessage = (event) => {
-        console.log("📡 SSE message received:", event.data)
         this.handleSSEMessage(event.data)
       }
       
       this.eventSource.onerror = (event) => {
-        console.error("❌ SSE connection error:", event)
         this.showError("SSE connection lost")
         this.stopSSEConnection()
         
@@ -74,17 +62,13 @@ export default class extends Controller {
         }, 5000)
       }
       
-      console.log("🔌 SSE EventSource created:", this.eventSource)
-      
     } catch (error) {
-      console.error("❌ Error creating SSE connection:", error)
       this.showError("Failed to establish SSE connection")
     }
   }
 
   stopSSEConnection() {
     if (this.eventSource) {
-      console.log("⏹️ Stopping SSE connection")
       this.eventSource.close()
       this.eventSource = null
     }
@@ -93,14 +77,13 @@ export default class extends Controller {
   handleSSEMessage(data) {
     try {
       const dashboardData = JSON.parse(data)
-      console.log("✅ Processing SSE data:", dashboardData.timestamp)
       
       this.updateDashboardWithData(dashboardData)
       this.updateLastRefreshTime()
       this.showSuccessIndicator()
       
     } catch (error) {
-      console.error("❌ Error parsing SSE data:", error)
+      // Silently handle parsing errors
     }
   }
 
