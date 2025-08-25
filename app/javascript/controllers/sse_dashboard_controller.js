@@ -3,12 +3,16 @@ import { Controller } from "@hotwired/stimulus"
 export default class extends Controller {
   static targets = ["content", "refreshBtn"]
   static values = { 
-    autoRefresh: { type: Boolean, default: true }
+    autoRefresh: { type: Boolean, default: true },
+    sseEndpoint: { type: String, default: "/dashboard/stream" },
+    ssePort: { type: Number, default: 3001 },
+    sseHost: { type: String, default: "localhost" }
   }
 
   connect() {
     console.log("🚀 SSE Dashboard controller connected")
     console.log("📊 Auto-refresh enabled:", this.autoRefreshValue)
+    console.log("🔗 SSE endpoint:", this.getSSEUrl())
     
     this.setupRefreshButton()
     this.showConnectedIndicator()
@@ -23,11 +27,29 @@ export default class extends Controller {
     this.stopSSEConnection()
   }
 
+  getSSEUrl() {
+    // Use Go server by default (port 3001), fallback to Rails server (port 3000)
+    const port = this.ssePortValue
+    const host = this.sseHostValue
+    const endpoint = this.sseEndpointValue
+    
+    // If using Go server (port 3001), construct full URL
+    if (port === 3001) {
+      return `http://${host}:${port}${endpoint}`
+    }
+    
+    // For Rails server (port 3000), use relative URL
+    return endpoint
+  }
+
   startSSEConnection() {
     console.log("🔄 Starting SSE connection")
     
     try {
-      this.eventSource = new EventSource('/dashboard/stream')
+      const sseUrl = this.getSSEUrl()
+      console.log("🔗 Connecting to SSE endpoint:", sseUrl)
+      
+      this.eventSource = new EventSource(sseUrl)
       
       this.eventSource.onopen = (event) => {
         console.log("✅ SSE connection opened")

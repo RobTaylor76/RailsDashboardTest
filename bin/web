@@ -8,6 +8,22 @@ echo "Threads: ${RAILS_MAX_THREADS:-25}"
 # Set default threads for SSE support if not already set
 export RAILS_MAX_THREADS=${RAILS_MAX_THREADS:-25}
 
+# SSE Configuration - defaults to Go server on port 3001
+export SSE_SERVER_TYPE=${SSE_SERVER_TYPE:-go}
+export SSE_HOST=${SSE_HOST:-localhost}
+export SSE_PORT=${SSE_PORT:-3001}
+export SSE_ENDPOINT=${SSE_ENDPOINT:-/dashboard/stream}
+export SSE_AUTO_REFRESH=${SSE_AUTO_REFRESH:-true}
+export SSE_CONNECTION_TIMEOUT=${SSE_CONNECTION_TIMEOUT:-5000}
+export SSE_RETRY_INTERVAL=${SSE_RETRY_INTERVAL:-5000}
+
+echo "SSE Configuration:"
+echo "  Server Type: $SSE_SERVER_TYPE"
+echo "  Host: $SSE_HOST"
+echo "  Port: $SSE_PORT"
+echo "  Endpoint: $SSE_ENDPOINT"
+echo "  Auto-refresh: $SSE_AUTO_REFRESH"
+
 # Ensure PID directory exists
 mkdir -p tmp/pids
 

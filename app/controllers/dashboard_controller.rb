@@ -2,7 +2,7 @@ class DashboardController < ApplicationController
   include ActionController::Live
   layout 'dashboard'
   
-  helper_method :controller_action_to_controller_name
+  helper_method :controller_action_to_controller_name, :sse_config
   
   def index
     load_dashboard_data
@@ -277,5 +277,10 @@ class DashboardController < ApplicationController
       end,
       timestamp: Time.current.strftime("%H:%M:%S")
     }
+  end
+
+  # SSE configuration helper
+  def sse_config
+    SSEConfig.js_config
   end
 end 

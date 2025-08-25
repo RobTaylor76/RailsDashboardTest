@@ -155,13 +155,25 @@ func generateDashboardData() DashboardData {
 
 // streamHandler handles SSE stream requests
 func (s *SSEServer) streamHandler(w http.ResponseWriter, r *http.Request) {
+	// Set CORS headers for SSE
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Cache-Control")
+	w.Header().Set("Access-Control-Allow-Credentials", "true")
+	
+	// Handle preflight requests
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
 	// Set SSE headers
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 
-	// Get the flusher
+	// Get flusher for streaming
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		http.Error(w, "Streaming unsupported", http.StatusInternalServerError)
@@ -266,6 +278,25 @@ func debugHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(data)
 }
 
+// CORS middleware function
+func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Set CORS headers
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Cache-Control")
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
+		
+		// Handle preflight requests
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		
+		next(w, r)
+	}
+}
+
 func main() {
 	// Get port from environment variable or use default
 	port := os.Getenv("PORT")
@@ -278,7 +309,7 @@ func main() {
 	sseServer := NewSSEServer()
 
 	// Set up routes
-	http.HandleFunc("/dashboard/stream", sseServer.streamHandler)
+	http.HandleFunc("/dashboard/stream", corsMiddleware(sseServer.streamHandler))
 	http.HandleFunc("/dashboard/debug", debugHandler)
 
 	// Health check
