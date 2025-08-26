@@ -145,14 +145,15 @@ func NewSSEClient(id int, url string, connectTimeout time.Duration, logger *Logg
 		}).DialContext,
 		MaxIdleConns:          100,
 		IdleConnTimeout:       90 * time.Second,
-		TLSHandshakeTimeout:   10 * time.Second,
+		TLSHandshakeTimeout:   5 * time.Second, // Shorter for faster shutdown
 		ExpectContinueTimeout: 1 * time.Second,
 	}
 
 	// Create client with no timeout (for SSE streaming)
+	// Note: We don't set a timeout here because SSE streams should run indefinitely
+	// Context cancellation will handle graceful shutdown
 	client := &http.Client{
 		Transport: transport,
-		// No timeout - let the SSE stream run indefinitely
 	}
 
 	return &SSEClient{
@@ -196,7 +197,13 @@ func (s *SSEClient) Connect(ctx context.Context, onConnect func()) error {
 		s.logger.Error("[Client %d] ❌ HTTP request failed after %v: %v", s.ID, connectDuration, err)
 		return fmt.Errorf("failed to connect: %w", err)
 	}
-	defer resp.Body.Close()
+
+	// Ensure response body is closed on exit
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			s.logger.Debug("[Client %d] 🔌 Response body close error (expected during shutdown): %v", s.ID, err)
+		}
+	}()
 
 	s.logger.Debug("[Client %d] 📥 Received response: status=%d, duration=%v", s.ID, resp.StatusCode, connectDuration)
 
@@ -218,9 +225,15 @@ func (s *SSEClient) Connect(ctx context.Context, onConnect func()) error {
 
 	s.logger.Debug("[Client %d] 📡 Starting to read SSE stream...", s.ID)
 	scanner := bufio.NewScanner(resp.Body)
+
+	// Create a channel to signal when context is done
+	ctxDone := ctx.Done()
+
 	for scanner.Scan() {
+		// Check for context cancellation before processing the line
 		select {
-		case <-ctx.Done():
+		case <-ctxDone:
+			s.logger.Debug("[Client %d] 🛑 Context canceled, stopping SSE stream", s.ID)
 			return ctx.Err()
 		default:
 		}
@@ -262,7 +275,14 @@ func (s *SSEClient) Connect(ctx context.Context, onConnect func()) error {
 		}
 	}
 
+	// Check scanner error and handle context cancellation gracefully
 	if err := scanner.Err(); err != nil {
+		// Check if this is a context cancellation (graceful shutdown)
+		if err == context.Canceled || strings.Contains(err.Error(), "context canceled") {
+			s.logger.Debug("[Client %d] 🛑 SSE stream closed due to context cancellation", s.ID)
+			return ctx.Err()
+		}
+
 		s.logger.Error("[Client %d] ❌ Scanner error: %v", s.ID, err)
 		return fmt.Errorf("scanner error: %w", err)
 	}
@@ -285,16 +305,16 @@ func (s *SSEClient) handleMessage(data string) {
 		return
 	}
 
-	// Print formatted message to console
-	fmt.Printf("\n[Client %d] 📡 Message #%d received at %s\n", s.ID, s.Messages, dashboardData.Timestamp)
-	fmt.Printf("   Status: %s (Uptime: %s)\n", dashboardData.SystemStatus.Status, dashboardData.SystemStatus.Uptime)
-	fmt.Printf("   CPU: %s | Memory: %s | Disk: %s | Network: %s\n",
+	// Log formatted message using logger
+	s.logger.Debug("[Client %d] 📡 Message #%d received at %s", s.ID, s.Messages, dashboardData.Timestamp)
+	s.logger.Debug("   Status: %s (Uptime: %s)", dashboardData.SystemStatus.Status, dashboardData.SystemStatus.Uptime)
+	s.logger.Debug("   CPU: %s | Memory: %s | Disk: %s | Network: %s",
 		dashboardData.Metrics.CPU, dashboardData.Metrics.Memory,
 		dashboardData.Metrics.Disk, dashboardData.Metrics.Network)
-	fmt.Printf("   Response Time: %s\n", dashboardData.Metrics.ResponseTime)
+	s.logger.Debug("   Response Time: %s", dashboardData.Metrics.ResponseTime)
 
 	if len(dashboardData.Activities) > 0 {
-		fmt.Printf("   Latest Activity: %s - %s (%s)\n",
+		s.logger.Debug("   Latest Activity: %s - %s (%s)",
 			dashboardData.Activities[0].Time,
 			dashboardData.Activities[0].Message,
 			dashboardData.Activities[0].Level)
@@ -319,9 +339,9 @@ func (s *SSEClient) MarkDisconnected() {
 func (w *WebSocketClient) Connect(ctx context.Context, onConnect func()) error {
 	w.logger.Debug("[WebSocket Client %d] 🔗 Attempting to connect to %s", w.ID, w.URL)
 
-	// Create WebSocket dialer
+	// Create WebSocket dialer with shorter timeout for faster shutdown response
 	dialer := websocket.Dialer{
-		HandshakeTimeout: 10 * time.Second,
+		HandshakeTimeout: 5 * time.Second,
 	}
 
 	// Connect to WebSocket
@@ -596,7 +616,20 @@ func main() {
 	go func() {
 		<-sigChan
 		logger.Info("\n🛑 Shutting down gracefully...")
+		logger.Info("⏳ Waiting for clients to finish (max 30 seconds)...")
 		cancel()
+
+		// Give clients time to shutdown gracefully
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer shutdownCancel()
+
+		// Wait for shutdown with timeout
+		select {
+		case <-shutdownCtx.Done():
+			logger.Warn("⚠️  Shutdown timeout reached, forcing exit...")
+		case <-time.After(100 * time.Millisecond):
+			// Small delay to allow immediate shutdown if all clients are done
+		}
 	}()
 
 	// Create statistics tracker
@@ -623,6 +656,14 @@ func main() {
 	// Start all clients
 	var wg sync.WaitGroup
 	for i := 1; i <= *numClients; i++ {
+		// Check for shutdown before starting each client
+		select {
+		case <-ctx.Done():
+			logger.Info("🛑 Shutdown requested, stopping client startup...")
+			goto shutdown
+		default:
+		}
+
 		logger.Debug("🚀 Starting %s client %d of %d", strings.ToUpper(*protocol), i, *numClients)
 		wg.Add(1)
 		go func(clientID int) {
@@ -668,12 +709,18 @@ func main() {
 							client.Errors++
 							client.mu.Unlock()
 
-							// Wait before retrying
+							// Wait before retrying (with shorter intervals for faster shutdown)
 							select {
 							case <-ctx.Done():
 								return
-							case <-time.After(5 * time.Second):
-								continue
+							case <-time.After(1 * time.Second):
+								// Check again after 1 second
+								select {
+								case <-ctx.Done():
+									return
+								case <-time.After(4 * time.Second):
+									continue
+								}
 							}
 						}
 					}
@@ -740,12 +787,18 @@ func main() {
 							client.Errors++
 							client.mu.Unlock()
 
-							// Wait before retrying
+							// Wait before retrying (with shorter intervals for faster shutdown)
 							select {
 							case <-ctx.Done():
 								return
-							case <-time.After(5 * time.Second):
-								continue
+							case <-time.After(1 * time.Second):
+								// Check again after 1 second
+								select {
+								case <-ctx.Done():
+									return
+								case <-time.After(4 * time.Second):
+									continue
+								}
 							}
 						}
 					}
@@ -755,13 +808,31 @@ func main() {
 
 		// Small delay between client starts to avoid overwhelming the server
 		if i < *numClients {
-			log.Printf("⏳ Waiting 10ms before starting next client...")
-			time.Sleep(10 * time.Millisecond)
+			// Check for shutdown during delay
+			select {
+			case <-ctx.Done():
+				logger.Info("🛑 Shutdown requested during client startup delay...")
+				goto shutdown
+			case <-time.After(10 * time.Millisecond):
+				logger.Debug("⏳ Waiting 10ms before starting next client...")
+			}
 		}
 	}
 
+shutdown:
+	// Wait for all clients to finish with timeout
+	logger.Info("⏳ Waiting for started clients to finish...")
+
+	// Create a channel to signal when wait group is done
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
 	// Wait for all clients to finish
-	wg.Wait()
+	<-done
+	logger.Info("✅ All clients finished gracefully")
 
 	// Final statistics
 	clients, messages, heartbeats, errors, successful, active, closed, failed := stats.GetStats()
