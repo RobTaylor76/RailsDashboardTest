@@ -44,6 +44,34 @@ case $protocol_choice in
         ;;
 esac
 
+# Get log level
+echo ""
+echo "📝 Select log level:"
+echo "1. Error (errors only)"
+echo "2. Warn (warnings and errors)"
+echo "3. Info (default - general information)"
+echo "4. Debug (detailed debugging information)"
+read -p "Select log level (1-4, default: 3): " log_level_choice
+
+case $log_level_choice in
+    1)
+        log_level="error"
+        echo "🔴 Using Error log level"
+        ;;
+    2)
+        log_level="warn"
+        echo "🟡 Using Warn log level"
+        ;;
+    4)
+        log_level="debug"
+        echo "🔵 Using Debug log level"
+        ;;
+    *)
+        log_level="info"
+        echo "🟢 Using Info log level (default)"
+        ;;
+esac
+
 # Construct the correct URL based on protocol
 if [ "$protocol" = "websocket" ]; then
     base_url="ws://localhost:$port"
@@ -65,7 +93,7 @@ read -p "Select a test scenario (1-5): " choice
 case $choice in
     1)
         echo "🧪 Running single $protocol client test on port $port..."
-        ./sse-client -url "$base_url$endpoint" -protocol "$protocol" -debug
+        ./sse-client -url "$base_url$endpoint" -protocol "$protocol" -log-level "$log_level"
         ;;
     2)
         read -p "Enter number of clients (default: 5): " num_clients
@@ -73,7 +101,7 @@ case $choice in
             num_clients=5
         fi
         echo "🧪 Running multiple $protocol clients test ($num_clients clients) on port $port..."
-        ./sse-client -url "$base_url$endpoint" -protocol "$protocol" -clients "$num_clients" 
+        ./sse-client -url "$base_url$endpoint" -protocol "$protocol" -clients "$num_clients" -log-level "$log_level"
         ;;
     3)
         read -p "Enter number of clients (default: 20): " num_clients
@@ -81,7 +109,7 @@ case $choice in
             num_clients=20
         fi
         echo "🧪 Running $protocol load test ($num_clients clients with stats) on port $port..."
-        ./sse-client -url "$base_url$endpoint" -protocol "$protocol" -clients "$num_clients" -stats
+        ./sse-client -url "$base_url$endpoint" -protocol "$protocol" -clients "$num_clients" -stats -log-level "$log_level"
         ;;
     4)
         read -p "Enter custom URL (default: $base_url$endpoint): " custom_url
@@ -98,7 +126,7 @@ case $choice in
             stats_flag="-stats"
         fi
         echo "🧪 Running custom $protocol test with URL: $custom_url and $num_clients clients..."
-        ./sse-client -url "$custom_url" -protocol "$protocol" -clients "$num_clients" $stats_flag
+        ./sse-client -url "$custom_url" -protocol "$protocol" -clients "$num_clients" $stats_flag -log-level "$log_level"
         ;;
     5)
         echo "👋 Goodbye!"

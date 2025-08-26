@@ -15,15 +15,20 @@ show_usage() {
     echo "Arguments:"
     echo "  PORT    Port number to run the server on (default: $DEFAULT_PORT)"
     echo ""
+    echo "Environment Variables:"
+    echo "  LOG_LEVEL    Logging level: debug, info, warn, error (default: info)"
+    echo ""
     echo "Examples:"
-    echo "  $0              # Run on port $DEFAULT_PORT"
-    echo "  $0 3002         # Run on port 3002"
-    echo "  $0 8080         # Run on port 8080"
+    echo "  $0              # Run on port $DEFAULT_PORT with info logging"
+    echo "  $0 3002         # Run on port 3002 with info logging"
+    echo "  $0 8080         # Run on port 8080 with info logging"
+    echo "  LOG_LEVEL=debug $0  # Run with debug logging"
+    echo "  LOG_LEVEL=warn $0   # Run with warning logging only"
     echo ""
     echo "Endpoints:"
     echo "  SSE Stream:     http://localhost:\$PORT/dashboard/stream"
+    echo "  WebSocket:      ws://localhost:\$PORT/cable"
     echo "  Debug:          http://localhost:\$PORT/dashboard/debug"
-    echo "  Test Trigger:   http://localhost:\$PORT/dashboard/trigger-test"
     echo "  Health Check:   http://localhost:\$PORT/health"
 }
 
@@ -54,11 +59,17 @@ build_server() {
 start_server() {
     local port=$1
     
-    echo "🚀 Starting Go SSE Server on port $port"
+    # Set default logging level if not already set
+    if [ -z "$LOG_LEVEL" ]; then
+        export LOG_LEVEL=info
+    fi
+    
+    echo "🚀 Starting Go SSE/WebSocket Server on port $port"
     echo "📡 SSE endpoint: http://localhost:$port/dashboard/stream"
+    echo "🔌 WebSocket endpoint: ws://localhost:$port/cable"
     echo "🔍 Debug endpoint: http://localhost:$port/dashboard/debug"
-    echo "🧪 Test endpoint: http://localhost:$port/dashboard/trigger-test"
     echo "💚 Health check: http://localhost:$port/health"
+    echo "📝 Log level: $LOG_LEVEL"
     echo ""
     echo "Press Ctrl+C to stop the server"
     echo ""
