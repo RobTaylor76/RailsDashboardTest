@@ -120,7 +120,6 @@ type WebSocketConnection struct {
 	ID            string
 	Conn          *websocket.Conn
 	Subscriptions map[string]bool
-	LastSeen      time.Time
 	mu            sync.RWMutex // Protects Subscriptions map from concurrent access
 }
 
@@ -220,11 +219,10 @@ func (s *ServerStats) GetStats() (totalSSE, currentSSE, totalWS, currentWS, sseM
 
 // SSEConnection represents a single SSE connection
 type SSEConnection struct {
-	ID       string
-	Writer   http.ResponseWriter
-	Flusher  http.Flusher
-	Done     chan bool
-	LastSeen time.Time
+	ID      string
+	Writer  http.ResponseWriter
+	Flusher http.Flusher
+	Done    chan bool
 }
 
 // NewServer creates a new combined server
@@ -332,7 +330,6 @@ func (s *Server) broadcastToSSE(data interface{}) {
 			continue
 		}
 		conn.Flusher.Flush()
-		conn.LastSeen = time.Now()
 		s.stats.IncrementSSEMessage()
 		s.logger.Debug("Sent SSE data to connection %s", conn.ID)
 	}
@@ -375,7 +372,6 @@ func (s *Server) broadcastToWebSocket(channel string, data interface{}) {
 				s.logger.Error("Error sending WebSocket data to connection %s: %v", conn.ID, err)
 				continue
 			}
-			conn.LastSeen = time.Now()
 			s.logger.Debug("Successfully sent message to WebSocket connection %s", conn.ID)
 		} else {
 			s.logger.Debug("WebSocket connection %s not subscribed to %s (subscriptions: %v)", conn.ID, channel, conn.Subscriptions)
@@ -413,11 +409,10 @@ func (s *Server) streamHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Create connection
 	conn := &SSEConnection{
-		ID:       s.generateConnectionID(),
-		Writer:   w,
-		Flusher:  flusher,
-		Done:     make(chan bool),
-		LastSeen: time.Now(),
+		ID:      s.generateConnectionID(),
+		Writer:  w,
+		Flusher: flusher,
+		Done:    make(chan bool),
 	}
 
 	// Add connection
@@ -458,7 +453,6 @@ func (s *Server) streamHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			flusher.Flush()
-			conn.LastSeen = time.Now()
 			s.logger.Debug("💓 Heartbeat sent to SSE connection %s", conn.ID)
 		case msg := <-redisCh:
 			// Handle Redis message
@@ -482,7 +476,6 @@ func (s *Server) streamHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			flusher.Flush()
-			conn.LastSeen = time.Now()
 
 			// Reset heartbeat timer since we just sent data
 			heartbeatTicker.Reset(30 * time.Second)
@@ -513,7 +506,6 @@ func (s *Server) websocketHandler(w http.ResponseWriter, r *http.Request) {
 		ID:            s.generateConnectionID(),
 		Conn:          conn,
 		Subscriptions: make(map[string]bool),
-		LastSeen:      time.Now(),
 	}
 
 	// Add connection
@@ -545,9 +537,14 @@ func (s *Server) websocketHandler(w http.ResponseWriter, r *http.Request) {
 		s.logger.Warn("⚠️ Redis not available for WebSocket connection: %s", wsConn.ID)
 	}
 
-	// Setup ping ticker (keep-alive pings every 60 seconds)
+	// Setup ping ticker (check for idle connections every 60 seconds)
 	pingTicker := time.NewTicker(60 * time.Second)
 	defer pingTicker.Stop()
+
+	// Helper function to reset ping ticker
+	resetPingTicker := func() {
+		pingTicker.Reset(60 * time.Second)
+	}
 
 	// Create a channel for incoming messages
 	incomingMessages := make(chan []byte, 10)
@@ -600,14 +597,14 @@ func (s *Server) websocketHandler(w http.ResponseWriter, r *http.Request) {
 			s.logger.Info("🛑 WebSocket read goroutine finished: %s", wsConn.ID)
 			return
 		case <-pingTicker.C:
-			// Send ping
+			// Send ping (ticker only fires if no activity has reset it)
 			pingMsg := ActionCableMessage{Type: "ping"}
 			if err := conn.WriteJSON(pingMsg); err != nil {
 				s.logger.Error("❌ Error sending ping to WebSocket connection %s: %v", wsConn.ID, err)
 				s.logger.Info("🛑 WebSocket connection terminated due to ping error: %s", wsConn.ID)
 				return
 			}
-			wsConn.LastSeen = time.Now()
+			resetPingTicker() // Reset ticker after sending ping
 			s.logger.Info("💓 Ping sent to WebSocket connection %s", wsConn.ID)
 		case msg := <-redisCh:
 			// Handle Redis message - send directly to this connection if subscribed
@@ -644,7 +641,7 @@ func (s *Server) websocketHandler(w http.ResponseWriter, r *http.Request) {
 					wsConn.mu.RUnlock()
 					return
 				}
-				wsConn.LastSeen = time.Now()
+				resetPingTicker() // Reset ping ticker since we just sent a message
 				s.stats.IncrementWebSocketMessage()
 				s.logger.Debug("Successfully sent message to WebSocket connection %s", wsConn.ID)
 			}
@@ -652,6 +649,7 @@ func (s *Server) websocketHandler(w http.ResponseWriter, r *http.Request) {
 			s.logger.Debug("Redis message processed for WebSocket connection %s: %s", wsConn.ID, msg.Payload)
 		case message := <-incomingMessages:
 			// Process incoming message
+			resetPingTicker() // Reset ping ticker since we received a message
 			s.handleWebSocketMessage(wsConn, message)
 		}
 	}
