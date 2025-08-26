@@ -301,7 +301,7 @@ func (s *Server) addWSConnection(conn *WebSocketConnection) {
 	defer s.wsMutex.Unlock()
 	s.wsConnections[conn.ID] = conn
 	s.stats.IncrementWebSocketConnection()
-	s.logger.Debug("WebSocket connection added: %s (total: %d)", conn.ID, len(s.wsConnections))
+	s.logger.Info("✅ WebSocket connection added: %s (total: %d)", conn.ID, len(s.wsConnections))
 }
 
 // removeWSConnection removes a WebSocket connection
@@ -310,7 +310,7 @@ func (s *Server) removeWSConnection(id string) {
 	defer s.wsMutex.Unlock()
 	delete(s.wsConnections, id)
 	s.stats.DecrementWebSocketConnection()
-	s.logger.Debug("WebSocket connection removed: %s (total: %d)", id, len(s.wsConnections))
+	s.logger.Info("❌ WebSocket connection removed: %s (total: %d)", id, len(s.wsConnections))
 }
 
 // broadcastToSSE broadcasts a message to all SSE connections
@@ -494,13 +494,19 @@ func (s *Server) streamHandler(w http.ResponseWriter, r *http.Request) {
 
 // websocketHandler handles WebSocket connections
 func (s *Server) websocketHandler(w http.ResponseWriter, r *http.Request) {
+	// Log connection attempt
+	s.logger.Info("🔗 WebSocket connection attempt from %s", r.RemoteAddr)
+
 	// Upgrade HTTP connection to WebSocket
 	conn, err := s.upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		s.logger.Error("WebSocket upgrade failed: %v", err)
+		s.logger.Error("❌ WebSocket upgrade failed: %v", err)
 		return
 	}
-	defer conn.Close()
+	defer func() {
+		s.logger.Info("🔌 WebSocket connection closed for %s", r.RemoteAddr)
+		conn.Close()
+	}()
 
 	// Create WebSocket connection
 	wsConn := &WebSocketConnection{
@@ -519,18 +525,24 @@ func (s *Server) websocketHandler(w http.ResponseWriter, r *http.Request) {
 	// Send welcome message
 	welcomeMsg := ActionCableMessage{Type: "welcome"}
 	if err := conn.WriteJSON(welcomeMsg); err != nil {
-		s.logger.Error("Error sending welcome message: %v", err)
+		s.logger.Error("❌ Error sending welcome message: %v", err)
 		return
 	}
+	s.logger.Info("🎉 Welcome message sent to WebSocket connection: %s", wsConn.ID)
 
 	// Setup Redis pub/sub if available
 	var redisCh <-chan *redis.Message
 	var pubsub *redis.PubSub
 	if s.redisClient != nil {
 		pubsub = s.redisClient.Subscribe(r.Context(), "dashboard_updates")
-		defer pubsub.Close()
+		defer func() {
+			s.logger.Info("🔌 Redis pub/sub closed for WebSocket connection: %s", wsConn.ID)
+			pubsub.Close()
+		}()
 		redisCh = pubsub.Channel()
-		s.logger.Debug("Redis pub/sub started for WebSocket connection: %s", wsConn.ID)
+		s.logger.Info("🔗 Redis pub/sub started for WebSocket connection: %s", wsConn.ID)
+	} else {
+		s.logger.Warn("⚠️ Redis not available for WebSocket connection: %s", wsConn.ID)
 	}
 
 	// Setup ping ticker
@@ -543,10 +555,15 @@ func (s *Server) websocketHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Start a separate goroutine for reading messages
 	go func() {
-		defer close(readDone)
+		defer func() {
+			s.logger.Info("🛑 WebSocket read goroutine exiting for connection: %s", wsConn.ID)
+			close(readDone)
+		}()
+
 		for {
 			select {
 			case <-r.Context().Done():
+				s.logger.Info("🛑 WebSocket read goroutine context done for connection: %s", wsConn.ID)
 				return
 			default:
 			}
@@ -558,7 +575,10 @@ func (s *Server) websocketHandler(w http.ResponseWriter, r *http.Request) {
 			_, message, err := conn.ReadMessage()
 			if err != nil {
 				if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-					s.logger.Error("WebSocket read error for connection %s: %v", wsConn.ID, err)
+					s.logger.Error("❌ WebSocket read error for connection %s: %v", wsConn.ID, err)
+					s.logger.Error("❌ WebSocket read error type: %T", wsConn.ID, err)
+				} else {
+					s.logger.Info("🔌 Normal WebSocket close for connection %s: %v", wsConn.ID, err)
 				}
 				return
 			}
@@ -576,16 +596,17 @@ func (s *Server) websocketHandler(w http.ResponseWriter, r *http.Request) {
 	for {
 		select {
 		case <-r.Context().Done():
-			s.logger.Debug("WebSocket client disconnected: %s", wsConn.ID)
+			s.logger.Info("🛑 WebSocket client disconnected (context done): %s", wsConn.ID)
 			return
 		case <-readDone:
-			s.logger.Debug("WebSocket read goroutine finished: %s", wsConn.ID)
+			s.logger.Info("🛑 WebSocket read goroutine finished: %s", wsConn.ID)
 			return
 		case <-pingTicker.C:
 			// Send ping
 			pingMsg := ActionCableMessage{Type: "ping"}
 			if err := conn.WriteJSON(pingMsg); err != nil {
-				s.logger.Error("Error sending ping to WebSocket connection %s: %v", wsConn.ID, err)
+				s.logger.Error("❌ Error sending ping to WebSocket connection %s: %v", wsConn.ID, err)
+				s.logger.Info("🛑 WebSocket connection terminated due to ping error: %s", wsConn.ID)
 				return
 			}
 			wsConn.LastSeen = time.Now()
@@ -620,7 +641,8 @@ func (s *Server) websocketHandler(w http.ResponseWriter, r *http.Request) {
 				s.logger.Debug("Sending Redis message to WebSocket connection %s", wsConn.ID)
 				err = conn.WriteMessage(websocket.TextMessage, jsonData)
 				if err != nil {
-					s.logger.Error("Error sending WebSocket data to connection %s: %v", wsConn.ID, err)
+					s.logger.Error("❌ Error sending WebSocket data to connection %s: %v", wsConn.ID, err)
+					s.logger.Info("🛑 WebSocket connection terminated due to write error: %s", wsConn.ID)
 					wsConn.mu.RUnlock()
 					return
 				}
@@ -676,10 +698,12 @@ func (s *Server) handleWebSocketMessage(conn *WebSocketConnection, message []byt
 				Identifier: msg.Identifier,
 			}
 			if err := conn.Conn.WriteJSON(confirmMsg); err != nil {
-				s.logger.Error("Error sending subscription confirmation: %v", err)
+				s.logger.Error("❌ Error sending subscription confirmation: %v", err)
+			} else {
+				s.logger.Info("✅ Subscription confirmation sent to connection %s for channel: %s", conn.ID, channelClass)
 			}
 
-			s.logger.Debug("WebSocket connection %s subscribed to channel: %s (stream: %s)", conn.ID, channelClass, streamName)
+			s.logger.Info("📡 WebSocket connection %s subscribed to channel: %s (stream: %s)", conn.ID, channelClass, streamName)
 			s.logger.Debug("Current subscriptions for connection %s: %v", conn.ID, conn.Subscriptions)
 		}
 

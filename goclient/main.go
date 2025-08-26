@@ -325,9 +325,14 @@ func (w *WebSocketClient) Connect(ctx context.Context, onConnect func()) error {
 	}
 
 	// Connect to WebSocket
-	conn, _, err := dialer.DialContext(ctx, w.URL, nil)
+	conn, resp, err := dialer.DialContext(ctx, w.URL, nil)
 	if err != nil {
 		w.logger.Error("[WebSocket Client %d] ❌ Failed to connect: %v", w.ID, err)
+		if resp != nil {
+			w.logger.Error("[WebSocket Client %d] ❌ HTTP response status: %d", w.ID, resp.StatusCode)
+			w.logger.Error("[WebSocket Client %d] ❌ HTTP response headers: %v", w.ID, resp.Header)
+		}
+		w.logger.Error("[WebSocket Client %d] ❌ Error type: %T", w.ID, err)
 		return fmt.Errorf("failed to connect: %w", err)
 	}
 
@@ -397,8 +402,11 @@ func (w *WebSocketClient) handleMessages(ctx context.Context) error {
 			_, message, err := w.Conn.ReadMessage()
 			if err != nil {
 				if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-					w.logger.Error("[WebSocket Client %d] ❌ WebSocket error: %v", w.ID, err)
+					w.logger.Error("[WebSocket Client %d] ❌ WebSocket read error: %v", w.ID, err)
+					w.logger.Error("[WebSocket Client %d] ❌ Error type: %T", w.ID, err)
 					w.incrementErrors()
+				} else {
+					w.logger.Debug("[WebSocket Client %d] 🔌 Normal WebSocket close: %v", w.ID, err)
 				}
 				return err
 			}
@@ -654,6 +662,7 @@ func main() {
 						default:
 							// This is a real connection error
 							logger.Error("[WebSocket Client %d] ❌ Connection error: %v", clientID, err)
+							logger.Error("[WebSocket Client %d] ❌ Connection URL: %s", clientID, client.URL)
 							stats.IncrementFailedConnection()
 							client.mu.Lock()
 							client.Errors++
@@ -683,8 +692,9 @@ func main() {
 							logger.Debug("[WebSocket Client %d] 🔄 Graceful shutdown (context done)", clientID)
 							return
 						default:
-							// This is a real connection error, continue to retry
-							logger.Warn("[WebSocket Client %d] 🔄 Connection lost, retrying...", clientID)
+							// This is a real connection error, log the specific error and continue to retry
+							logger.Error("[WebSocket Client %d] ❌ Connection lost with error: %v", clientID, err)
+							logger.Warn("[WebSocket Client %d] 🔄 Retrying connection...", clientID)
 							continue
 						}
 					}
