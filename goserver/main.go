@@ -545,8 +545,8 @@ func (s *Server) websocketHandler(w http.ResponseWriter, r *http.Request) {
 		s.logger.Warn("⚠️ Redis not available for WebSocket connection: %s", wsConn.ID)
 	}
 
-	// Setup ping ticker
-	pingTicker := time.NewTicker(30 * time.Second)
+	// Setup ping ticker (keep-alive pings every 60 seconds)
+	pingTicker := time.NewTicker(60 * time.Second)
 	defer pingTicker.Stop()
 
 	// Create a channel for incoming messages
@@ -554,6 +554,7 @@ func (s *Server) websocketHandler(w http.ResponseWriter, r *http.Request) {
 	readDone := make(chan bool)
 
 	// Start a separate goroutine for reading messages
+	// Note: No read deadline is set to allow long-lived connections
 	go func() {
 		defer func() {
 			s.logger.Info("🛑 WebSocket read goroutine exiting for connection: %s", wsConn.ID)
@@ -568,10 +569,7 @@ func (s *Server) websocketHandler(w http.ResponseWriter, r *http.Request) {
 			default:
 			}
 
-			// Set read deadline
-			conn.SetReadDeadline(time.Now().Add(30 * time.Second))
-
-			// Read message
+			// Read message (no deadline - let WebSocket handle timeouts naturally)
 			_, message, err := conn.ReadMessage()
 			if err != nil {
 				if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
@@ -610,7 +608,7 @@ func (s *Server) websocketHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			wsConn.LastSeen = time.Now()
-			s.logger.Debug("💓 Ping sent to WebSocket connection %s", wsConn.ID)
+			s.logger.Info("💓 Ping sent to WebSocket connection %s", wsConn.ID)
 		case msg := <-redisCh:
 			// Handle Redis message - send directly to this connection if subscribed
 			s.stats.IncrementRedisMessage()
