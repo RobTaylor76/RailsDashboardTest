@@ -57,3 +57,4 @@ fi
 
 echo ""
 echo "🎉 Shutdown tests completed!"
+

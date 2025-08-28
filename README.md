@@ -94,6 +94,166 @@ This system demonstrates different approaches to real-time data streaming:
 - Redis (Docker recommended)
 - Docker (optional)
 
+#### **Installing Go (for beginners)**
+
+If you don't have Go installed, follow these step-by-step instructions:
+
+##### **macOS Installation**
+
+**Option 1: Using Homebrew (Recommended)**
+```bash
+# Install Homebrew if you don't have it
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Install Go
+brew install go
+
+# Verify installation
+go version
+```
+
+**Option 2: Manual Installation**
+```bash
+# Download Go for macOS
+curl -O https://go.dev/dl/go1.21.0.darwin-amd64.pkg
+
+# Install the package
+sudo installer -pkg go1.21.0.darwin-amd64.pkg -target /
+
+# Verify installation
+go version
+```
+
+##### **Linux Installation**
+
+**Ubuntu/Debian:**
+```bash
+# Update package list
+sudo apt update
+
+# Install Go
+sudo apt install golang-go
+
+# Verify installation
+go version
+```
+
+**CentOS/RHEL/Fedora:**
+```bash
+# Install Go
+sudo dnf install golang  # Fedora
+# OR
+sudo yum install golang  # CentOS/RHEL
+
+# Verify installation
+go version
+```
+
+**Manual Installation (any Linux):**
+```bash
+# Download Go
+wget https://go.dev/dl/go1.21.0.linux-amd64.tar.gz
+
+# Extract to /usr/local
+sudo tar -C /usr/local -xzf go1.21.0.linux-amd64.tar.gz
+
+# Add Go to PATH (add to ~/.bashrc or ~/.zshrc)
+echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.bashrc
+source ~/.bashrc
+
+# Verify installation
+go version
+```
+
+##### **Windows Installation**
+
+**Option 1: Using Chocolatey**
+```powershell
+# Install Chocolatey if you don't have it
+# Run PowerShell as Administrator and execute:
+Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+
+# Install Go
+choco install golang
+
+# Verify installation
+go version
+```
+
+**Option 2: Manual Installation**
+1. Download Go from https://go.dev/dl/
+2. Run the installer and follow the prompts
+3. Open Command Prompt and verify: `go version`
+
+##### **Setting up Go Workspace (Important!)**
+
+After installing Go, set up your workspace:
+
+```bash
+# Create Go workspace directory
+mkdir -p ~/go/{bin,src,pkg}
+
+# Add to your shell profile (~/.bashrc, ~/.zshrc, or ~/.profile)
+echo 'export GOPATH=$HOME/go' >> ~/.bashrc
+echo 'export PATH=$PATH:$GOPATH/bin' >> ~/.bashrc
+source ~/.bashrc
+
+# Verify setup
+echo $GOPATH
+```
+
+##### **Verifying Go Installation**
+
+Test that Go is working correctly:
+
+```bash
+# Check Go version (should show 1.21 or higher)
+go version
+
+# Check Go environment
+go env
+
+# Test with a simple program
+mkdir ~/go/src/hello
+cd ~/go/src/hello
+echo 'package main
+
+import "fmt"
+
+func main() {
+    fmt.Println("Hello, Go!")
+}' > main.go
+
+# Run the program
+go run main.go
+# Should output: Hello, Go!
+```
+
+##### **Troubleshooting Go Installation**
+
+**Common Issues:**
+
+1. **"go: command not found"**
+   - Make sure Go is in your PATH
+   - Restart your terminal after installation
+   - Check: `echo $PATH | grep go`
+
+2. **Permission errors on macOS/Linux**
+   - Use `sudo` for system-wide installation
+   - Or install via package manager (Homebrew, apt, etc.)
+
+3. **GOPATH not set**
+   - Set GOPATH as shown above
+   - Restart terminal after setting environment variables
+
+4. **Version too old**
+   - Update Go: `brew upgrade go` (macOS) or download latest from go.dev/dl/
+
+**Need Help?**
+- Official Go documentation: https://go.dev/doc/
+- Go installation guide: https://go.dev/doc/install
+- Go workspace setup: https://go.dev/doc/gopath_code
+
 ### 1. Start Redis
 ```bash
 docker run -d --name redis-dashboard -p 6379:6379 redis:7-alpine
@@ -119,6 +279,135 @@ cd dashboard/goserver
 cd dashboard/goclient
 ./test.sh
 # Follow prompts to select test scenario and port
+```
+
+## 🔧 Environment Variables
+
+The application uses several environment variables for configuration. Copy the template from `env-template.txt` to create your `.env.development` and `.env.test` files.
+
+### **Database Configuration**
+```bash
+# PostgreSQL connection string
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/dashboard_development
+```
+
+### **Redis Configuration**
+```bash
+# Redis connection URL
+REDIS_URL=redis://localhost:6379
+```
+
+### **SSE Configuration**
+```bash
+# SSE server host and port
+SSE_HOST=localhost
+SSE_PORT=3001
+SSE_ENDPOINT=/dashboard/stream
+
+# SSE server type (go or rails)
+SSE_SERVER_TYPE=go
+
+# Auto-refresh settings
+SSE_AUTO_REFRESH=true
+SSE_CONNECTION_TIMEOUT=5000
+SSE_RETRY_INTERVAL=5000
+```
+
+### **Rails Configuration**
+```bash
+# Rails server settings
+RAILS_LOG_LEVEL=info
+RAILS_MAX_THREADS=25
+PORT=3000
+PIDFILE=tmp/pids/server.pid
+```
+
+### **Logging Configuration**
+```bash
+# Enable structured logging (false for development)
+LOGRAGE_ENABLED=false
+```
+
+### **Environment-Specific Settings**
+
+#### **Development Environment (`.env.development`)**
+```bash
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/dashboard_development
+REDIS_URL=redis://localhost:6379
+SSE_HOST=localhost
+SSE_PORT=3001
+SSE_SERVER_TYPE=go
+SSE_AUTO_REFRESH=true
+RAILS_LOG_LEVEL=info
+LOGRAGE_ENABLED=false
+```
+
+#### **Test Environment (`.env.test`)**
+```bash
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/dashboard_test
+REDIS_URL=redis://localhost:6379
+SSE_HOST=localhost
+SSE_PORT=3001
+SSE_SERVER_TYPE=go
+SSE_AUTO_REFRESH=true
+RAILS_LOG_LEVEL=info
+LOGRAGE_ENABLED=false
+```
+
+#### **Production Environment**
+For production, set these environment variables in your deployment platform:
+
+```bash
+# Required for production
+RAILS_ENV=production
+RAILS_SERVE_STATIC_FILES=true
+RAILS_LOG_TO_STDOUT=true
+RAILS_MASTER_KEY=<your-master-key>
+
+# Database and Redis (usually set by platform)
+DATABASE_URL=<production-database-url>
+REDIS_URL=<production-redis-url>
+
+# SSE Configuration
+SSE_HOST=<your-domain>
+SSE_PORT=443
+SSE_SERVER_TYPE=go
+SSE_AUTO_REFRESH=true
+
+# Performance tuning
+RAILS_MAX_THREADS=25
+RAILS_LOG_LEVEL=info
+LOGRAGE_ENABLED=true
+```
+
+### **Go Server Environment Variables**
+
+The Go server also supports environment variables for configuration:
+
+```bash
+# Go server port (default: 3001)
+SSE_PORT=3001
+
+# Redis connection
+REDIS_URL=redis://localhost:6379
+
+# Log level (debug, info, warn, error)
+LOG_LEVEL=info
+```
+
+### **Go Client Environment Variables**
+
+The Go client supports these environment variables:
+
+```bash
+# Default URL for testing
+SSE_URL=http://localhost:3000/dashboard/stream
+
+# Default number of clients
+SSE_CLIENTS=1
+
+# Log level
+LOG_LEVEL=info
 ```
 
 ## 📊 Performance Comparison

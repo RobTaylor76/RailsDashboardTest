@@ -1,0 +1,29 @@
+# Environment Variables Template
+# Copy this content to .env.development and .env.test files
+
+# Database
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/dashboard_development
+
+# Redis Configuration
+REDIS_URL=redis://localhost:6379
+
+# SSE Configuration
+SSE_HOST=localhost
+SSE_PORT=3001
+SSE_ENDPOINT=/dashboard/stream
+SSE_SERVER_TYPE=go
+SSE_AUTO_REFRESH=true
+SSE_CONNECTION_TIMEOUT=5000
+SSE_RETRY_INTERVAL=5000
+
+# Rails Configuration
+RAILS_LOG_LEVEL=info
+RAILS_MAX_THREADS=25
+PORT=3000
+PIDFILE=tmp/pids/server.pid
+
+# Logging
+LOGRAGE_ENABLED=false
+
+# For .env.test, change the DATABASE_URL to:
+# DATABASE_URL=postgres://postgres:postgres@localhost:5432/dashboard_test
