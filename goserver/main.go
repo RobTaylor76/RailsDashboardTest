@@ -513,28 +513,13 @@ func (s *Server) websocketHandler(w http.ResponseWriter, r *http.Request) {
 	s.addWSConnection(wsConn)
 	defer s.removeWSConnection(wsConn.ID)
 
-	// Send welcome message IMMEDIATELY after upgrade - Action Cable expects this FIRST
-	// Format must be exactly: {"type":"welcome"}
-	welcomeMsg := ActionCableMessage{Type: "welcome"}
-	welcomeJSON, err := json.Marshal(welcomeMsg)
-	if err != nil {
-		s.logger.Error("❌ Error marshaling welcome message: %v", err)
-		return
-	}
-
-	conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
-	if err := conn.WriteMessage(websocket.TextMessage, welcomeJSON); err != nil {
-		s.logger.Error("❌ Error sending welcome message: %v", err)
-		return
-	}
-	conn.SetWriteDeadline(time.Time{}) // Clear deadline
-
-	// Create a channel for incoming messages AFTER sending welcome
+	// Create a channel for incoming messages BEFORE sending welcome
+	// This ensures we don't miss subscription messages that arrive immediately
 	incomingMessages := make(chan []byte, 10)
 	readDone := make(chan bool)
 
-	// Start a separate goroutine for reading messages
-	// This starts after welcome is sent, but Action Cable will send subscription request after receiving welcome
+	// Start a separate goroutine for reading messages BEFORE sending welcome
+	// Some proxies may buffer messages, so we need to be ready to receive immediately
 	go func() {
 		defer func() {
 			close(readDone)
@@ -550,11 +535,22 @@ func (s *Server) websocketHandler(w http.ResponseWriter, r *http.Request) {
 			// Read message (no deadline - let WebSocket handle timeouts naturally)
 			_, message, err := conn.ReadMessage()
 			if err != nil {
+				// Always log the error details to understand why connection is closing
 				if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-					s.logger.Error("❌ WebSocket read error for connection %s: %v", wsConn.ID, err)
+					s.logger.Error("❌ WebSocket read error for connection %s: %v (type: %T)", wsConn.ID, err, err)
+				} else {
+					// Normal close or expected error - but log it to see what's happening
+					if closeErr, ok := err.(*websocket.CloseError); ok {
+						s.logger.Info("🔌 WebSocket read goroutine exiting for connection %s: close code %d, reason: %q", wsConn.ID, closeErr.Code, closeErr.Text)
+					} else {
+						s.logger.Info("🔌 WebSocket read goroutine exiting for connection %s: %v (type: %T)", wsConn.ID, err, err)
+					}
 				}
 				return
 			}
+
+			// Log received message for debugging proxy issues
+			s.logger.Info("📥 Received client message from connection %s: %s", wsConn.ID, string(message))
 
 			// Send message to main loop
 			select {
@@ -564,6 +560,25 @@ func (s *Server) websocketHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}()
+
+	// Send welcome message IMMEDIATELY after upgrade - Action Cable expects this FIRST
+	// Format must be exactly: {"type":"welcome"}
+	// NOTE: We send this AFTER starting the read goroutine to ensure we don't miss any messages
+	welcomeMsg := ActionCableMessage{Type: "welcome"}
+	welcomeJSON, err := json.Marshal(welcomeMsg)
+	if err != nil {
+		s.logger.Error("❌ Error marshaling welcome message: %v", err)
+		return
+	}
+
+	s.logger.Info("📤 Sending welcome message to connection %s: %s", wsConn.ID, string(welcomeJSON))
+	conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+	if err := conn.WriteMessage(websocket.TextMessage, welcomeJSON); err != nil {
+		s.logger.Error("❌ Error sending welcome message: %v", err)
+		return
+	}
+	conn.SetWriteDeadline(time.Time{}) // Clear deadline
+	s.logger.Info("✅ Welcome message sent, waiting for client subscription...")
 
 	// Setup Redis pub/sub if available
 	var redisCh <-chan *redis.Message
@@ -602,8 +617,10 @@ func (s *Server) websocketHandler(w http.ResponseWriter, r *http.Request) {
 	for {
 		select {
 		case <-r.Context().Done():
+			s.logger.Info("🔌 Main loop exiting due to context cancellation for connection %s", wsConn.ID)
 			return
 		case <-readDone:
+			s.logger.Info("🔌 Main loop exiting due to read goroutine completion for connection %s", wsConn.ID)
 			return
 		case <-pingTicker.C:
 			// Send ping (ticker only fires if no activity has reset it)
@@ -613,6 +630,7 @@ func (s *Server) websocketHandler(w http.ResponseWriter, r *http.Request) {
 				s.logger.Error("❌ Error marshaling ping message: %v", err)
 				continue
 			}
+			s.logger.Info("💓 Sending ping to connection %s", wsConn.ID)
 			if err := conn.WriteMessage(websocket.TextMessage, pingJSON); err != nil {
 				s.logger.Error("❌ Error sending ping to WebSocket connection %s: %v", wsConn.ID, err)
 				return
@@ -709,6 +727,7 @@ func (s *Server) handleWebSocketMessage(conn *WebSocketConnection, message []byt
 			if err != nil {
 				s.logger.Error("❌ Error marshaling subscription confirmation: %v", err)
 			} else {
+				s.logger.Info("📤 Sending subscription confirmation to connection %s: %s", conn.ID, string(confirmJSON))
 				conn.Conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
 				if err := conn.Conn.WriteMessage(websocket.TextMessage, confirmJSON); err != nil {
 					s.logger.Error("❌ Error sending subscription confirmation: %v", err)
