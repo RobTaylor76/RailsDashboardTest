@@ -12,7 +12,12 @@ Rails.application.routes.draw do
   # get "manifest" => "rails/pwa#manifest", as: :pwa_manifest
   # get "service-worker" => "rails/pwa#service_worker", as: :pwa_service_worker
 
-  # Dashboard routes
+  # Authentication routes
+  get "login", to: "sessions#new", as: :login
+  post "login", to: "sessions#create"
+  delete "logout", to: "sessions#destroy", as: :logout
+
+  # Dashboard routes (protected)
   root "dashboard#index"
   get "dashboard", to: "dashboard#index"
   get "dashboard/refresh", to: "dashboard#refresh"

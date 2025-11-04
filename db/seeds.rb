@@ -3,6 +3,16 @@ puts "Clearing existing data..."
 Metric.destroy_all
 Activity.destroy_all
 SystemStatus.destroy_all
+User.destroy_all
+
+# Create test user
+puts "Creating test user..."
+User.create!(
+  username: 'admin',
+  email: 'admin@example.com',
+  password: 'password123',
+  password_confirmation: 'password123'
+)
 
 # Create initial system status
 puts "Creating system status..."
