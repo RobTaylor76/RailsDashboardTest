@@ -433,7 +433,7 @@ func (s *Server) streamHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Setup heartbeat timer with reset capability
-	heartbeatTicker := time.NewTicker(30 * time.Second)
+	heartbeatTicker := time.NewTicker(15 * time.Second)
 	defer heartbeatTicker.Stop()
 
 	// Combined select statement for all events
@@ -478,7 +478,7 @@ func (s *Server) streamHandler(w http.ResponseWriter, r *http.Request) {
 			flusher.Flush()
 
 			// Reset heartbeat timer since we just sent data
-			heartbeatTicker.Reset(30 * time.Second)
+			heartbeatTicker.Reset(15 * time.Second)
 
 			s.logger.Debug("Redis message sent to SSE connection %s: %s", conn.ID, msg.Payload)
 		}
@@ -538,12 +538,12 @@ func (s *Server) websocketHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Setup ping ticker (check for idle connections every 60 seconds)
-	pingTicker := time.NewTicker(60 * time.Second)
+	pingTicker := time.NewTicker(15 * time.Second)
 	defer pingTicker.Stop()
 
 	// Helper function to reset ping ticker
 	resetPingTicker := func() {
-		pingTicker.Reset(60 * time.Second)
+		pingTicker.Reset(15 * time.Second)
 	}
 
 	// Create a channel for incoming messages
