@@ -64,8 +64,19 @@ Rails.application.configure do
   # Annotate rendered view with file names.
   config.action_view.annotate_rendered_view_with_filenames = true
 
-  # Uncomment if you wish to allow Action Cable access from any origin.
+  # Configure Action Cable for WebSocket connections
+  # If WEBSOCKET_PORT is set, use it for a separate WebSocket server
+  # Otherwise, use the same port as Rails server (PORT)
+  rails_port = ENV.fetch("PORT", 3000)
+  websocket_port = ENV.fetch("WEBSOCKET_PORT", rails_port)
+  websocket_host = ENV.fetch("WEBSOCKET_HOST", "localhost")
+  
+  # Action Cable URL - use WEBSOCKET_PORT if set, otherwise use Rails server port
+  websocket_url = "ws://#{websocket_host}:#{websocket_port}/cable"
+  
   config.action_cable.disable_request_forgery_protection = true
+  config.action_cable.url = websocket_url
+  config.action_cable.allowed_request_origins = [/http:\/\/localhost:*/]
 
   # Raise error when a before_action's only/except options reference missing actions.
   config.action_controller.raise_on_missing_callback_actions = true

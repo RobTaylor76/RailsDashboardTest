@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -264,6 +265,8 @@ func NewServer(logLevel string) *Server {
 			CheckOrigin: func(r *http.Request) bool {
 				return true // Allow all origins for development
 			},
+			// Action Cable requires the subprotocol to be negotiated
+			Subprotocols: []string{"actioncable-v1-json", "actioncable-unsupported"},
 		},
 		logger: logger,
 		stats:  NewServerStats(),
@@ -487,10 +490,8 @@ func (s *Server) streamHandler(w http.ResponseWriter, r *http.Request) {
 
 // websocketHandler handles WebSocket connections
 func (s *Server) websocketHandler(w http.ResponseWriter, r *http.Request) {
-	// Log connection attempt
 	s.logger.Info("🔗 WebSocket connection attempt from %s", r.RemoteAddr)
 
-	// Upgrade HTTP connection to WebSocket
 	conn, err := s.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		s.logger.Error("❌ WebSocket upgrade failed: %v", err)
@@ -512,15 +513,57 @@ func (s *Server) websocketHandler(w http.ResponseWriter, r *http.Request) {
 	s.addWSConnection(wsConn)
 	defer s.removeWSConnection(wsConn.ID)
 
-	s.logger.Debug("WebSocket connection established: %s", wsConn.ID)
-
-	// Send welcome message
+	// Send welcome message IMMEDIATELY after upgrade - Action Cable expects this FIRST
+	// Format must be exactly: {"type":"welcome"}
 	welcomeMsg := ActionCableMessage{Type: "welcome"}
-	if err := conn.WriteJSON(welcomeMsg); err != nil {
+	welcomeJSON, err := json.Marshal(welcomeMsg)
+	if err != nil {
+		s.logger.Error("❌ Error marshaling welcome message: %v", err)
+		return
+	}
+
+	conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+	if err := conn.WriteMessage(websocket.TextMessage, welcomeJSON); err != nil {
 		s.logger.Error("❌ Error sending welcome message: %v", err)
 		return
 	}
-	s.logger.Info("🎉 Welcome message sent to WebSocket connection: %s", wsConn.ID)
+	conn.SetWriteDeadline(time.Time{}) // Clear deadline
+
+	// Create a channel for incoming messages AFTER sending welcome
+	incomingMessages := make(chan []byte, 10)
+	readDone := make(chan bool)
+
+	// Start a separate goroutine for reading messages
+	// This starts after welcome is sent, but Action Cable will send subscription request after receiving welcome
+	go func() {
+		defer func() {
+			close(readDone)
+		}()
+
+		for {
+			select {
+			case <-r.Context().Done():
+				return
+			default:
+			}
+
+			// Read message (no deadline - let WebSocket handle timeouts naturally)
+			_, message, err := conn.ReadMessage()
+			if err != nil {
+				if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+					s.logger.Error("❌ WebSocket read error for connection %s: %v", wsConn.ID, err)
+				}
+				return
+			}
+
+			// Send message to main loop
+			select {
+			case incomingMessages <- message:
+			case <-r.Context().Done():
+				return
+			}
+		}
+	}()
 
 	// Setup Redis pub/sub if available
 	var redisCh <-chan *redis.Message
@@ -537,75 +580,44 @@ func (s *Server) websocketHandler(w http.ResponseWriter, r *http.Request) {
 		s.logger.Warn("⚠️ Redis not available for WebSocket connection: %s", wsConn.ID)
 	}
 
-	// Setup ping ticker (check for idle connections every 60 seconds)
-	pingTicker := time.NewTicker(15 * time.Second)
+	// Setup ping ticker - Action Cable default is 3 seconds
+	// Configurable via WEBSOCKET_PING_INTERVAL env var (in seconds)
+	pingIntervalSeconds := 3
+	if pingIntervalEnv := os.Getenv("WEBSOCKET_PING_INTERVAL"); pingIntervalEnv != "" {
+		if parsed, err := strconv.Atoi(pingIntervalEnv); err == nil && parsed > 0 {
+			pingIntervalSeconds = parsed
+		}
+	}
+	pingInterval := time.Duration(pingIntervalSeconds) * time.Second
+
+	pingTicker := time.NewTicker(pingInterval)
 	defer pingTicker.Stop()
 
 	// Helper function to reset ping ticker
 	resetPingTicker := func() {
-		pingTicker.Reset(15 * time.Second)
+		pingTicker.Reset(pingInterval)
 	}
-
-	// Create a channel for incoming messages
-	incomingMessages := make(chan []byte, 10)
-	readDone := make(chan bool)
-
-	// Start a separate goroutine for reading messages
-	// Note: No read deadline is set to allow long-lived connections
-	go func() {
-		defer func() {
-			s.logger.Info("🛑 WebSocket read goroutine exiting for connection: %s", wsConn.ID)
-			close(readDone)
-		}()
-
-		for {
-			select {
-			case <-r.Context().Done():
-				s.logger.Info("🛑 WebSocket read goroutine context done for connection: %s", wsConn.ID)
-				return
-			default:
-			}
-
-			// Read message (no deadline - let WebSocket handle timeouts naturally)
-			_, message, err := conn.ReadMessage()
-			if err != nil {
-				if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-					s.logger.Error("❌ WebSocket read error for connection %s: %v", wsConn.ID, err)
-					s.logger.Error("❌ WebSocket read error type: %T", wsConn.ID, err)
-				} else {
-					s.logger.Info("🔌 Normal WebSocket close for connection %s: %v", wsConn.ID, err)
-				}
-				return
-			}
-
-			// Send message to main loop
-			select {
-			case incomingMessages <- message:
-			case <-r.Context().Done():
-				return
-			}
-		}
-	}()
 
 	// Main loop for handling all messages (Redis, ping, incoming)
 	for {
 		select {
 		case <-r.Context().Done():
-			s.logger.Info("🛑 WebSocket client disconnected (context done): %s", wsConn.ID)
 			return
 		case <-readDone:
-			s.logger.Info("🛑 WebSocket read goroutine finished: %s", wsConn.ID)
 			return
 		case <-pingTicker.C:
 			// Send ping (ticker only fires if no activity has reset it)
 			pingMsg := ActionCableMessage{Type: "ping"}
-			if err := conn.WriteJSON(pingMsg); err != nil {
+			pingJSON, err := json.Marshal(pingMsg)
+			if err != nil {
+				s.logger.Error("❌ Error marshaling ping message: %v", err)
+				continue
+			}
+			if err := conn.WriteMessage(websocket.TextMessage, pingJSON); err != nil {
 				s.logger.Error("❌ Error sending ping to WebSocket connection %s: %v", wsConn.ID, err)
-				s.logger.Info("🛑 WebSocket connection terminated due to ping error: %s", wsConn.ID)
 				return
 			}
 			resetPingTicker() // Reset ticker after sending ping
-			s.logger.Info("💓 Ping sent to WebSocket connection %s", wsConn.ID)
 		case msg := <-redisCh:
 			// Handle Redis message - send directly to this connection if subscribed
 			s.stats.IncrementRedisMessage()
@@ -637,7 +649,6 @@ func (s *Server) websocketHandler(w http.ResponseWriter, r *http.Request) {
 				err = conn.WriteMessage(websocket.TextMessage, jsonData)
 				if err != nil {
 					s.logger.Error("❌ Error sending WebSocket data to connection %s: %v", wsConn.ID, err)
-					s.logger.Info("🛑 WebSocket connection terminated due to write error: %s", wsConn.ID)
 					wsConn.mu.RUnlock()
 					return
 				}
@@ -688,19 +699,24 @@ func (s *Server) handleWebSocketMessage(conn *WebSocketConnection, message []byt
 			conn.Subscriptions[streamName] = true
 			conn.mu.Unlock()
 
-			// Send confirmation
+			// Send confirmation - Action Cable expects this IMMEDIATELY after subscription request
+			// Format: {"type":"confirm_subscription","identifier":"{\"channel\":\"DashboardUpdatesChannel\"}"}
 			confirmMsg := ActionCableMessage{
 				Type:       "confirm_subscription",
 				Identifier: msg.Identifier,
 			}
-			if err := conn.Conn.WriteJSON(confirmMsg); err != nil {
-				s.logger.Error("❌ Error sending subscription confirmation: %v", err)
+			confirmJSON, err := json.Marshal(confirmMsg)
+			if err != nil {
+				s.logger.Error("❌ Error marshaling subscription confirmation: %v", err)
 			} else {
-				s.logger.Info("✅ Subscription confirmation sent to connection %s for channel: %s", conn.ID, channelClass)
+				conn.Conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+				if err := conn.Conn.WriteMessage(websocket.TextMessage, confirmJSON); err != nil {
+					s.logger.Error("❌ Error sending subscription confirmation: %v", err)
+				} else {
+					conn.Conn.SetWriteDeadline(time.Time{}) // Clear deadline
+					s.logger.Info("✅ WebSocket connection %s subscribed to channel: %s", conn.ID, channelClass)
+				}
 			}
-
-			s.logger.Info("📡 WebSocket connection %s subscribed to channel: %s (stream: %s)", conn.ID, channelClass, streamName)
-			s.logger.Debug("Current subscriptions for connection %s: %v", conn.ID, conn.Subscriptions)
 		}
 
 	case "unsubscribe":

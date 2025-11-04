@@ -8,10 +8,6 @@ export default class extends Controller {
   }
 
   connect() {
-    console.log("🚀 WebSocket Dashboard controller connected")
-    console.log("📊 Auto-refresh enabled:", this.autoRefreshValue)
-    console.log("🔌 Action Cable consumer:", consumer)
-    
     this.setupRefreshButton()
     this.showConnectedIndicator()
     
@@ -21,48 +17,38 @@ export default class extends Controller {
   }
 
   disconnect() {
-    console.log("🔌 WebSocket Dashboard controller disconnected")
     this.stopWebSocketConnection()
   }
 
   startWebSocketConnection() {
-    console.log("🔄 Starting WebSocket connection")
-    
     try {
       // Subscribe to the dashboard updates channel
       this.subscription = consumer.subscriptions.create("DashboardUpdatesChannel", {
         connected: () => {
-          console.log("✅ WebSocket connection opened")
           this.showConnectedIndicator()
         },
         
         disconnected: () => {
-          console.log("❌ WebSocket connection closed")
           this.showError("WebSocket connection lost")
         },
         
         rejected: () => {
-          console.log("❌ WebSocket connection rejected")
           this.showError("WebSocket connection rejected")
         },
         
         received: (data) => {
-          console.log("📡 WebSocket message received:", data)
           this.handleWebSocketMessage(data)
         }
       })
       
-      console.log("🔌 WebSocket subscription created:", this.subscription)
-      
     } catch (error) {
-      console.error("❌ Error creating WebSocket connection:", error)
+      console.error("Error creating WebSocket connection:", error)
       this.showError("Failed to establish WebSocket connection")
     }
   }
 
   stopWebSocketConnection() {
     if (this.subscription) {
-      console.log("⏹️ Stopping WebSocket connection")
       this.subscription.unsubscribe()
       this.subscription = null
     }
@@ -70,20 +56,15 @@ export default class extends Controller {
 
   handleWebSocketMessage(data) {
     try {
-      console.log("✅ Processing WebSocket data:", data.timestamp)
-      
       this.updateDashboardWithData(data)
       this.updateLastRefreshTime()
       this.showSuccessIndicator()
-      
     } catch (error) {
-      console.error("❌ Error processing WebSocket data:", error)
+      console.error("Error processing WebSocket data:", error)
     }
   }
 
   updateDashboardWithData(data) {
-    console.log("🔄 Updating dashboard with WebSocket data")
-    
     try {
       // Update system status
       const uptimeElement = document.getElementById('uptime')
@@ -120,29 +101,22 @@ export default class extends Controller {
           </div>
         `).join('')
       }
-      
-      console.log("✅ Dashboard updated successfully with WebSocket data")
     } catch (error) {
-      console.error("❌ Error updating dashboard with WebSocket data:", error)
+      console.error("Error updating dashboard with WebSocket data:", error)
     }
   }
 
   setupRefreshButton() {
     if (this.hasRefreshBtnTarget) {
-      console.log("🔘 Setting up refresh button")
       this.refreshBtnTarget.addEventListener("click", (e) => {
         e.preventDefault()
-        console.log("🖱️ Manual refresh button clicked")
         this.manualRefresh()
       })
-    } else {
-      console.log("⚠️ Refresh button target not found")
     }
   }
 
   manualRefresh() {
     // For manual refresh, we can still use the JSON endpoint
-    console.log("🔄 Manual refresh triggered")
     
     this.showLoadingState()
     
@@ -159,14 +133,13 @@ export default class extends Controller {
       throw new Error("Manual refresh failed")
     })
     .then(data => {
-      console.log("✅ Manual refresh successful")
       this.updateDashboardWithData(data)
       this.hideLoadingState()
       this.updateLastRefreshTime()
       this.showSuccessIndicator()
     })
     .catch(error => {
-      console.error("❌ Manual refresh error:", error)
+      console.error("Manual refresh error:", error)
       this.hideLoadingState()
       this.showError("Manual refresh failed")
     })

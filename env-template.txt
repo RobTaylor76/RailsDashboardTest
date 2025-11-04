@@ -22,6 +22,17 @@ RAILS_MAX_THREADS=25
 PORT=3000
 PIDFILE=tmp/pids/server.pid
 
+# WebSocket Configuration (Action Cable)
+# Set WEBSOCKET_PORT if you have a separate WebSocket server running on a different port
+# If not set, Action Cable will use the same port as Rails server (PORT)
+# Example: WEBSOCKET_PORT=3001 (for a separate WebSocket server on port 3001)
+# WEBSOCKET_PORT=3001
+# WEBSOCKET_HOST=localhost
+# Ping interval in seconds (Action Cable default is 3 seconds)
+# WEBSOCKET_PING_INTERVAL=3
+# For production with a separate WebSocket server, you can set:
+# WEBSOCKET_URL=wss://your-domain.com/cable
+
 # Logging
 LOGRAGE_ENABLED=false
 

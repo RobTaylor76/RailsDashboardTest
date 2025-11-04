@@ -3,4 +3,17 @@
 
 import { createConsumer } from "@rails/actioncable"
 
-export default createConsumer()
+// Get the WebSocket URL from meta tag or default to /cable
+const getWebSocketURL = () => {
+  const metaTag = document.querySelector('meta[name="action-cable-url"]')
+  if (metaTag) {
+    return metaTag.getAttribute('content')
+  }
+  
+  // Fallback: construct URL from current location
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  const host = window.location.host
+  return `${protocol}//${host}/cable`
+}
+
+export default createConsumer(getWebSocketURL())

@@ -1,15 +1,19 @@
 import consumer from "channels/consumer"
 
-consumer.subscriptions.create("DashboardUpdatesChannel", {
-  connected() {
-    // Called when the subscription is ready for use on the server
-  },
+// NOTE: This subscription is commented out to avoid duplicate subscriptions
+// The websocket_dashboard_controller.js handles the subscription instead
+// Uncomment if you want this channel to auto-subscribe when loaded
 
-  disconnected() {
-    // Called when the subscription has been terminated by the server
-  },
-
-  received(data) {
-    // Called when there's incoming data on the websocket for this channel
-  }
-});
+// consumer.subscriptions.create("DashboardUpdatesChannel", {
+//   connected() {
+//     console.log("📡 DashboardUpdatesChannel auto-subscription connected")
+//   },
+//
+//   disconnected() {
+//     console.log("📡 DashboardUpdatesChannel auto-subscription disconnected")
+//   },
+//
+//   received(data) {
+//     console.log("📡 DashboardUpdatesChannel auto-subscription received:", data)
+//   }
+// });

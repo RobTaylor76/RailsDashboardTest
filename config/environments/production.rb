@@ -79,6 +79,31 @@ Rails.application.configure do
   # Only use :id for inspections in production.
   config.active_record.attributes_for_inspect = [ :id ]
 
+  # Configure Action Cable for WebSocket connections in production
+  # Use WSS (secure WebSocket) since force_ssl is enabled
+  # Allow WebSocket port to be configured via WEBSOCKET_PORT env var, defaults to Rails server port
+  websocket_port = ENV.fetch("WEBSOCKET_PORT", ENV.fetch("PORT", 3000))
+  websocket_host = ENV.fetch("WEBSOCKET_HOST", ENV.fetch("RAILS_HOST", "localhost"))
+  
+  # Set allowed origins via environment variable or use same-origin policy
+  if ENV['ACTION_CABLE_ALLOWED_ORIGINS']
+    config.action_cable.allowed_request_origins = ENV['ACTION_CABLE_ALLOWED_ORIGINS'].split(',')
+  else
+    # Default to same-origin only (more secure)
+    config.action_cable.allowed_request_origins = [/https?:\/\/#{Regexp.escape(websocket_host)}/]
+  end
+  
+  # Action Cable URL can be explicitly set via WEBSOCKET_URL or auto-constructed
+  if ENV['WEBSOCKET_URL']
+    config.action_cable.url = ENV['WEBSOCKET_URL']
+  else
+    # Auto-construct WSS URL (secure WebSocket for HTTPS)
+    protocol = config.force_ssl ? 'wss' : 'ws'
+    config.action_cable.url = "#{protocol}://#{websocket_host}:#{websocket_port}/cable"
+  end
+  
+  config.action_cable.disable_request_forgery_protection = false
+
   # Enable DNS rebinding protection and other `Host` header attacks.
   # config.hosts = [
   #   "example.com",     # Allow requests from example.com
